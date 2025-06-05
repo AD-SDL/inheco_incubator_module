@@ -21,11 +21,20 @@ class Interface:
         port,
         dll_path=r"C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll",
     ):
-        """Initializes and opens the connection to the incubator"""
+        """Opens the connection to the incubator.
+
+        Note: No need to initialize here. Initialization completed
+        on startup of each module
+        """
 
         # set up logger
         self.port = port  # COM port of the device(s)
         self.logger = logging.getLogger(__name__)
+        logging.basicConfig(
+            filename="inheco_interface.log",
+            level=logging.DEBUG,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        )
 
         self.lock = threading.Lock()
         clr.AddReference(dll_path)
@@ -33,7 +42,6 @@ class Interface:
 
         self.incubator_com = Com()
         self.open_connection()
-        # initialization is completed by each node on startup
 
     # DEVICE CONTROL
     def open_connection(self):
@@ -42,7 +50,7 @@ class Interface:
             response = self.incubator_com.openCom(self.port)
             if response == 77:
                 self.logger.info("Com connection opened successfully")
-                print("Com connection opened successfully")
+                print("Com connection opened successfully")  # helpful terminal message
             else:
                 # response 170 means failed
                 self.logger.error("Failed to open the Inheco incubator Com connection")
@@ -61,20 +69,18 @@ class Interface:
         self.send_message("AID", stack_floor=stack_floor, read_delay=3)
         self.logger.info(f"Inheco incubator initialized at stack floor {stack_floor}")
         print(f"Inheco incubator initialized at stack floor {stack_floor}")
-        # TODO: do I need a delay here to wait while it initializes?
 
-    def reset_device(self, stack_floor: int):
+    def reset_device(self, stack_floor: int) -> str:
         """Resets the Inheco Single Plate Incubator Device
         Note: seems to respond 88 regardless of success or failure
         """
         response = self.send_message(
             "SRS", stack_floor=stack_floor, read_delay=5
-        )  # wait 5 seconds for device to reset before reading response
+        )  # wait 5 seconds before reading response
         self.logger.info("device reset")
-        print("device reset")
         return response
 
-    def report_error_flags(self, stack_floor: int):
+    def report_error_flags(self, stack_floor: int) -> str:
         """Reports any error flags present on device
         Responses:
             0 = no errors
@@ -131,7 +137,7 @@ class Interface:
         self.send_message("SHE", stack_floor=stack_floor)
         self.logger.info("stopped heater")
 
-    def is_heater_active(self, stack_floor: int):
+    def is_heater_active(self, stack_floor: int) -> bool:
         """Returns True if heater/cooler is activated, otherwise False"""
         response = self.send_message("RHE", stack_floor=stack_floor)
 
@@ -146,7 +152,7 @@ class Interface:
                     "Unexpected integer response from is_heater_active query"
                 )
         except Exception as e:
-            print("Unable to parse is_heater_active response")
+            print(f"Unable to parse is_heater_active response: {response}")
             self.logger.error(
                 f"Unable to parse is_heater_active response: {response}. {traceback.format_exc()}"
             )
@@ -159,7 +165,7 @@ class Interface:
             "AOD",
             stack_floor=stack_floor,
             read_delay=6,
-        )  # wait 6 seconds for door to open before reading com response
+        )  # wait 6 seconds before reading com response
         self.logger.info("opened door")
 
     def close_door(self, stack_floor: int):
@@ -168,11 +174,13 @@ class Interface:
             "ACD",
             stack_floor=stack_floor,
             read_delay=7,
-        )  # wait 7 seconds for door to close before reading com response
+        )  # wait 7 seconds before reading com response
         self.logger.info("closed door")
 
-    def report_door_status(self, stack_floor: int):  # (TODO: have it return an int?)
+    def report_door_status(self, stack_floor: int):
         """Determines if front incubator door is open.
+
+        TODO: return true/false?
 
         Responses:
             0 = door closed
@@ -182,8 +190,10 @@ class Interface:
         self.logger.debug(f"door status (0 closed, 1 open): {response}")
         return response
 
-    def report_labware(self, stack_floor: int):  # (TODO: have it return an int?)
+    def report_labware(self, stack_floor: int):
         """Determines if labware is present in incubator
+
+        TODO: return int?
 
         Responses:
             0 = no labware present
@@ -193,6 +203,7 @@ class Interface:
         """
         response = self.send_message("RLW", stack_floor=stack_floor)
         self.logger.debug(f"report labware response: {response}")
+
         return response
 
     # SHAKER COMMANDS
@@ -219,8 +230,10 @@ class Interface:
         self.send_message("ASE0", stack_floor=stack_floor, read_delay=5)
         self.logger.info("stopped shaker")
 
-    def is_shaker_active(self, stack_floor: int):
+    def is_shaker_active(self, stack_floor: int) -> bool:
         """Determines if incubator shaker is active.
+
+        # TODO: should we be raising exceptions here?
 
         Returns:
             True = shaker is active
@@ -299,7 +312,9 @@ class Interface:
             raise e
 
     # HELPER COMMANDS
-    def send_message(self, message_string, device_id=2, stack_floor=0, read_delay=0.5):
+    def send_message(
+        self, message_string, device_id=2, stack_floor=0, read_delay=0.5
+    ) -> str:
         """Formats and sends message to Inheco Device, then collects device response
 
         Arguments:
@@ -333,15 +348,13 @@ class Interface:
 
             # Read COM port response
             response = self.incubator_com.readCom()
-            print(f"RESPONSE FROM COM PORT: {response}")
             self.logger.debug(f"sent message response: {response}")
             formatted_response = self.format_response(response, device_id=device_id)
-            print(f"FORMATTED RESPONSE FROM COM PORT: {formatted_response}")
             self.logger.debug(f"sent message formatted response: {formatted_response}")
 
             return formatted_response
 
-    def format_response(self, response: str, device_id: int):
+    def format_response(self, response: str, device_id: int) -> str:
         """Extracts important message details from longer com response message
 
         Arguments:
@@ -349,25 +362,22 @@ class Interface:
 
         Returns:
             formatted_response: response from the Com port without extra characters
-        """
-        # TODO: format the message based on device id! not hardcoded 2
-        # Q: do we want to allow devices in the same stack to have different device IDs?
-        # To use the below code, need to pass device ID into every FastAPI and device call.
-        # superscript_digits = {
-        #     0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴",
-        #     5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹"
-        # }
-        # superscript_device_id = ''.join(superscript_digits[int(d)] for d in str(self.device_id))
 
-        # remove extra characters
-        formatted_response = response.replace("`", "")
-        formatted_response = formatted_response.replace(
-            "²", ""
-        )  # the 2 here is actually the device id
-        formatted_response = formatted_response.strip()
+        Note: the extra characters relate to device id. They are not needed.
+        """
+        try:
+            # remove extra characters
+            formatted_response = response[1:]  # remove extra beginning characters
+            formatted_response = formatted_response[:-4]
+
+        except Exception as e:
+            self.logger.debug(
+                f"Device response ({response} could not be formatted. {e}"
+            )
 
         # check for '#' response meaning invalid command was sent
         if formatted_response == "#":
+            self.logger.debug("Error: invalid command sent, '#' response received")
             raise Exception("Error: invalid command sent, '#' response received")
 
         return formatted_response

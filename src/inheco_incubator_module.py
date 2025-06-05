@@ -58,7 +58,7 @@ rest_module.arg_parser.add_argument(
     "--interface_port",
     type=int,
     help="Inheco Interface FastAPI server port",
-    default=7000,  # TODO:  pick a better default
+    default=7000,
 )
 
 # parse the arguments
@@ -82,22 +82,25 @@ def inheco_startup(state: State):
     logger.info("startup called")
 
     # configure urls for connection to Interface API
-    state.base_url = f"http://{args.interface_host}:{args.interface_port}"  # NOTE: why does this not work with https?
+    state.base_url = f"http://{args.interface_host}:{args.interface_port}"
 
+    # initialize device
     response = send_get_request(
         base_url=state.base_url,
         action_string="initialize",
         stack_floor=state.stack_floor,
     )
 
+    # log
     logger.debug(response)
-
     logger.info("startup complete")
 
 
 # HELPER FUNCTIONS
-def reset_device(state: State):  # for admin actions (TODO: return step succeded)
-    """Resets the device"""
+def reset_device(state: State):  # for admin actions
+    """Resets the device
+    TODO: return step succeded?
+    """
     logger.info("restart called")
     response = send_get_request(
         base_url=state.base_url,
@@ -140,7 +143,7 @@ def count_down_incubation(state: State, total_incubation_seconds: int):
 
     # count down incubation seconds and update state
     logger.info(f"Starting incubation for {total_incubation_seconds} seconds")
-    while incubation_seconds_completed < total_incubation_seconds:
+    while int(incubation_seconds_completed) < int(total_incubation_seconds):
         time.sleep(1)
         incubation_seconds_completed += 1
         state.incubation_seconds_remaining = (
@@ -207,8 +210,6 @@ def open(
 ) -> StepResponse:
     """Opens the Inheco incubator tray"""
     logger.info("open called")
-
-    # TODO: disable the shaker if shaking (necessary?)
 
     response = send_get_request(
         state.base_url, action_string="open_door", stack_floor=state.stack_floor
@@ -346,7 +347,7 @@ def incubate(
             payload_dict = payload.model_dump()
             send_post_request(
                 state.base_url, "set_shaker_parameters", arguments_dict=payload_dict
-            )  # WORKING
+            )
 
             # start shaker (status = "ND" means shake without checking for labware)
             payload = StartShakerRequest(stack_floor=state.stack_floor, status="ND")
@@ -368,7 +369,7 @@ def incubate(
 
     # incubate
     try:
-        if wait_for_incubation_time:  # == TRUE
+        if wait_for_incubation_time:
             if incubation_time:
                 # call countdown incubation time in SAME process
                 count_down_incubation(
@@ -378,7 +379,7 @@ def incubate(
                 raise IncubateParametersError(
                     "You must specify incubation_time if wait_for_incubation is True"
                 )
-        else:  # == FALSE
+        else:
             if incubation_time:
                 # call countdown incubation time in DIFFERENT process
                 thread = Thread(
