@@ -20,7 +20,7 @@ device = None  # singleton interface instance
 app = FastAPI()
 config = {}
 cached_states = {}
-device_lock = threading.Lock()  # Q: do I need to do this here if it's in the driver?
+device_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -48,7 +48,7 @@ def read_root():
 @app.on_event("startup")
 async def startup_event():
     "Called on start up of the FAST API"
-    # TODO: app.on_event depricated. switch to lifespan events
+    # TODO: app.on_event deprecated. switch to lifespan events
     global device
     with device_lock:
         try:

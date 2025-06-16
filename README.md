@@ -6,7 +6,7 @@ Contains an Inheco incubator interface (inheco_incubator_interface.py), a FastAP
 
 ### General notes on structure
 
-Inheco incubators can be stacked on top of eachother. The bottom device is connected to power and the computer over a COM port. All other devices in the stack are ultimately connected through master-slave serial communication to the bottom device. Thus, only the COM port and device ID of the bottom device are required to send commands to all devices in the same stack. Stack floor is used to differentiate the incubators in a stack, with the bottom device having a stack floor of 0, the device above that having a stack floor of 1, and so on until the top of the stack.
+Inheco incubators can be stacked on top of each other. The bottom device is connected to power and the computer over a COM port. All other devices in the stack are ultimately connected through master-slave serial communication to the bottom device. Thus, only the COM port and device ID of the bottom device are required to send commands to all devices in the same stack. Stack floor is used to differentiate the incubators in a stack, with the bottom device having a stack floor of 0, the device above that having a stack floor of 1, and so on until the top of the stack.
 
 You could have multiple stacks of incubators following this same pattern.
 
@@ -28,20 +28,20 @@ General install instructions:
 
 The inheco incubator interface connects to the entire stack (one or multiple devices) over the COM port of the master device and can be used to send commands to any device in the stack.
 
-Test the interface connection with the command below: 
+Test the interface connection with the command below:
 
     python your\\path\\to\\inheco_incubator_interface.py --device <(optional) your COM port> --dll_path <(optional) path to incubator control dll (ComLib.dll)>
 
 --device will default to "COM5" and -dll_path will default to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll".
 
-Example usage with no optional arguments: 
+Example usage with no optional arguments:
 
     python inheco_incubator_interface.py
 
 Example usage with optional device argument:
 
     python inheco_incubator_interface.py --device "COM5" --dll_path "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
-    
+
 This will print "Inheco incubator device connected" along with the specified COM port if the interface is able to connect correctly to the device.
 
 You can also use this Python interface in other programs. The link below shows an example Python program which uses the Inheco interface to demonstrate all functions available in the interface.
@@ -55,18 +55,18 @@ The FastAPI wrapper instantiates a singleton instance of the inheco incubator in
 
 If you plan to run each device through a WEI REST module, you will need to start the FastAPI server before starting one WEI node for each device.
 
-Start the FastAPI Server with the command below: 
+Start the FastAPI Server with the command below:
 
     python your\\path\\to\\inheco_interface_FastAPI_wrapper.py --host <(optional) host computer IP for the interface API> --device <(optional) COM Port for the incubator device(s)> --port <(optional) Port to run FastAPI on> --dll_path <(optional) path to incubator control dll (ComLib.dll)>.
 
 
 --host will default to "0.0.0.0", --device will default to "COM5", --port will default to 7000, and dll_path will default to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll".
 
-Example usage with no optional arguments: 
+Example usage with no optional arguments:
 
     python inheco_interface_FastAPI_wrapper.py
 
-Example usage with all optional arguments: 
+Example usage with all optional arguments:
 
     python inheco_interface_FastAPI_wrapper.py --host "0.0.0.0" --device "COM5" --port 7000 --dll_path "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
 
@@ -76,9 +76,9 @@ Once the FastAPI Wrapper is running, you can go to the docs of your server to te
 
 If you would like to run these devices through WEI, you will need to start one WEI REST Node for each individual device, even if they are in the same stack.
 
-Each WEI REST Node can be started with a command in the format below, making sure to adjust the stack floor argument for each device: 
+Each WEI REST Node can be started with a command in the format below, making sure to adjust the stack floor argument for each device:
 
-    python your\\path\\to\\inheco_incubator_module.py --port <Port over which to comunicate with WEI> --device_id <(optional) device ID of the Inheco incubator device> --stack_floor <(optional) stack floor of the Inheco incubator device> --interface_host <(optional) Inheco Interface FastAPI server host> --interface_port <(optional) Inheco Interface FastAPI server port> --port <Port over which to comunicate with WEI>
+    python your\\path\\to\\inheco_incubator_module.py --port <Port over which to communicate with WEI> --device_id <(optional) device ID of the Inheco incubator device> --stack_floor <(optional) stack floor of the Inheco incubator device> --interface_host <(optional) Inheco Interface FastAPI server host> --interface_port <(optional) Inheco Interface FastAPI server port> --port <Port over which to communicate with WEI>
 
 --device_id will default to 2, --stack_floor will default to 0, --interface_host will default to 127.0.0.0, and --interface_port will default to 7000 unless specified. You must specify --port.
 

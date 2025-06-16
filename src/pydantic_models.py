@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 
 class TemperatureRequest(BaseModel):
-    """Model for settting temperature on incubator devices"""
+    """Model for setting temperature on incubator devices"""
 
     stack_floor: int
     temperature: float

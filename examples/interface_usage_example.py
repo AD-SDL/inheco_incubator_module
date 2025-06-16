@@ -1,5 +1,5 @@
 """
-Example file to demonstrate usage of the tekmatic incubator interface through python
+Example file to demonstrate usage of the inheco incubator interface through python
 
 This example assumes two devices in one stack. Please edit to suit your needs.
 """

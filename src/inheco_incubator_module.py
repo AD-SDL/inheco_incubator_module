@@ -99,7 +99,7 @@ def inheco_startup(state: State):
 # HELPER FUNCTIONS
 def reset_device(state: State):  # for admin actions
     """Resets the device
-    TODO: return step succeded?
+    TODO: return step succeeded?
     """
     logger.info("restart called")
     response = send_get_request(
@@ -161,6 +161,7 @@ def count_down_incubation(state: State, total_incubation_seconds: int):
 
 class IncubateParametersError(Exception):
     """raised when incubation action parameters are invalid"""
+
     pass
 
 
@@ -234,7 +235,7 @@ def close(
     state: State,
     action: ActionRequest,
 ) -> StepResponse:
-    """Closes the Tekmatic incubator tray"""
+    """Closes the Inheco incubator tray"""
     logger.info("close called")
     response = send_get_request(
         state.base_url, action_string="close_door", stack_floor=state.stack_floor
@@ -261,7 +262,7 @@ def set_temperature(
         "(optional) turn on heating/cooling element, on = True (default), off = False",
     ] = False,
 ) -> StepResponse:
-    """Sets the temperature in Celsius on the Tekmatic incubator. If activate is set to False, heating element will turn off"""
+    """Sets the temperature in Celsius on the Inheco incubator. If activate is set to False, heating element will turn off"""
     logger.info("set temperature called")
 
     # set the target temperature
@@ -435,8 +436,7 @@ By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This ca
 # def reset(state: State):
 #     """Support resetting the module.
 #     This should clear errors and reconnect to/reinitialize the device, if possible"""
-#     state.tekmatic.reset_device()
-#     state.tekmatic.initialize()
+#     pass
 
 # default LOCK and UNLOCK actions are sufficient
 

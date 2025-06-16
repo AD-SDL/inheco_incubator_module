@@ -2,27 +2,27 @@ name: Demonstrate Inheco single plate incubator actions
 
 metadata:
   author: Casey Stone
-  info: Workflow for demonstrating the tekmatic incubator actions
+  info: Workflow for demonstrating the inheco incubator actions
   version: 0.1
 
 flowdef:
   - name: open incubator
-    module: inheco_devID2_floor0  # Through WEI you can give each WEI REST Node module a name
+    module: inheco_devID2_stackfloor0  # Through WEI you can give each WEI REST Node module a name
     action: open
 
   - name: close incubator
-    module: inheco_devID2_floor0
+    module: inheco_devID2_stackfloor0
     action: close
 
   - name: set temperature
-    module: inheco_devID2_floor0
+    module: inheco_devID2_stackfloor0
     action: set_temperature
     args:
       temperature: 30.0
       activate: True
 
   - name: start 60 second incubation, block until finished
-    module: inheco_devID2_floor0
+    module: inheco_devID2_stackfloor0
     action: incubate
     args:
       temperature: 30.0
@@ -31,7 +31,7 @@ flowdef:
       incubation_time: 60
 
   - name: start continuous incubation, non-blocking
-    module: tekmatic
+    module: inheco_devID2_stackfloor0
     action: incubate
     args:
       temperature: 30.0

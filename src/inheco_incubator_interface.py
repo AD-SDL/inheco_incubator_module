@@ -408,5 +408,5 @@ if __name__ == "__main__":
     device = args.device
     dll_path = args.dll_path
 
-    com = Interface(port=device, dll_path=dll_path)  # TODO: TEST
+    com = Interface(port=device, dll_path=dll_path)
     print(f"Inheco incubator device connected, {device}")
