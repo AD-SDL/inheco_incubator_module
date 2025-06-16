@@ -15,7 +15,7 @@ You could have multiple stacks of incubators following this same pattern.
 
 Inheco incubators run on Windows systems. See device documentation on system requirements for more details.
 
-Before using Inheco incubator(s), you will need to clone the module GitHub repo and install the dependencies. Use the code below to complete this step. 
+Before using Inheco incubator(s), you will need to clone the module GitHub repo and install the dependencies. Use the code below to complete this step.
 
 General install instructions:
 
