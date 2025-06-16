@@ -26,7 +26,6 @@ class Interface:
         Note: No need to initialize here. Initialization completed
         on startup of each module
         """
-
         # set up logger
         self.port = port  # COM port of the device(s)
         self.logger = logging.getLogger(__name__)
@@ -399,8 +398,15 @@ if __name__ == "__main__":
         help="Serial port for communicating with the device",
         default="COM5",
     )
+    argparser.add_argument(
+        "--dll_path",
+        type=str,
+        help="Path to inheco device dll",
+        default="C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll",
+    )
     args = argparser.parse_args()
     device = args.device
+    dll_path = args.dll_path
 
-    com = Interface(port=device)
+    com = Interface(port=device, dll_path=dll_path)  # TODO: TEST
     print(f"Inheco incubator device connected, {device}")

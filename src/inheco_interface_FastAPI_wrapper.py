@@ -31,10 +31,11 @@ logging.basicConfig(
 
 
 # GENERAL ACTIONS
-def create_app(device: int):
+def create_app(device: int, dll_path: str):
     """Created the app and opens connection to the specified COM port"""
     global config
     config["device"] = device
+    config["dll_path"] = dll_path
     return app
 
 
@@ -51,7 +52,7 @@ async def startup_event():
     global device
     with device_lock:
         try:
-            device = Interface(config["device"])
+            device = Interface(port=config["device"], dll_path=config["dll_path"])
         except Exception as e:
             raise (e)
 
@@ -304,8 +305,14 @@ if __name__ == "__main__":
         help="COM Port for the incubator device(s)",
     )
     parser.add_argument("--port", type=int, default=7000, help="Port to run FastAPI on")
+    parser.add_argument(
+        "--dll_path",
+        type=str,
+        help="Path to inheco device dll",
+        default="C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll",
+    )
 
     args = parser.parse_args()
 
-    app = create_app(args.device)
+    app = create_app(device=args.device, dll_path=args.dll_path)
     uvicorn.run(app, host=args.host, port=args.port)

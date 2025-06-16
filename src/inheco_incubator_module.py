@@ -161,7 +161,6 @@ def count_down_incubation(state: State, total_incubation_seconds: int):
 
 class IncubateParametersError(Exception):
     """raised when incubation action parameters are invalid"""
-
     pass
 
 
@@ -211,6 +210,14 @@ def open(
     """Opens the Inheco incubator tray"""
     logger.info("open called")
 
+    # stop the shaker if running
+    response = send_get_request(
+        state.base_url, action_string="stop_shaker", stack_floor=state.stack_floor
+    )
+    logger.debug("stopping shaker")
+    logger.debug(response)
+
+    # open the door
     response = send_get_request(
         state.base_url, action_string="open_door", stack_floor=state.stack_floor
     )
