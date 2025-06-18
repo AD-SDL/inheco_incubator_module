@@ -5,8 +5,9 @@ REST-based node for Inheco Single Plate Incubators that interfaces with WEI
 import logging
 import time
 import traceback
-from typing import Optional
+from threading import Thread
 
+import requests
 from starlette.datastructures import State
 from typing_extensions import Annotated
 from wei.modules.rest_module import RESTModule
@@ -18,7 +19,11 @@ from wei.types.step_types import (
     StepResponse,
 )
 
-from inheco_incubator_interface import Interface
+from pydantic_models import (
+    SetShakerParametersRequest,
+    StartShakerRequest,
+    TemperatureRequest,
+)
 
 # create logger
 logger = logging.getLogger(__name__)
@@ -31,13 +36,6 @@ rest_module = RESTModule(
     model="inheco",
 )
 
-# add arguments
-rest_module.arg_parser.add_argument(
-    "--dll_path",
-    type=str,
-    help="path to incubator control dll (ComLib.dll)",
-    default="C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll",
-)
 rest_module.arg_parser.add_argument(
     "--device_id",
     type=int,
@@ -51,10 +49,16 @@ rest_module.arg_parser.add_argument(
     default=0,
 )
 rest_module.arg_parser.add_argument(
-    "--device",
+    "--interface_host",
     type=str,
-    help="Serial port for communicating with the device",
-    default="COM5",
+    help="Inheco Interface FastAPI server host",
+    default="127.0.0.0",
+)
+rest_module.arg_parser.add_argument(
+    "--interface_port",
+    type=int,
+    help="Inheco Interface FastAPI server port",
+    default=7000,
 )
 
 # parse the arguments
@@ -62,63 +66,140 @@ args = rest_module.arg_parser.parse_args()
 
 # format logging file based on device id
 logging.basicConfig(
-    filename=f"inheco_deviceID{args.device_id}.log",
+    filename=f"inheco_deviceID{args.device_id}_stackFloor{args.stack_floor}.log",
     level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s %(name)s %(message)s')
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
 
 @rest_module.startup()
 def inheco_startup(state: State):
     """Initializes the inheco interface and opens the COM connection"""
-    logger.info("startup called")
-    state.incubator = None
-    state.incubator = Interface()
-    state.incubator.initialize_device()
     state.is_incubating_only = False
     state.incubation_seconds_remaining = 0
+    state.stack_floor = args.stack_floor
+
+    logger.info("startup called")
+
+    # configure urls for connection to Interface API
+    state.base_url = f"http://{args.interface_host}:{args.interface_port}"
+
+    # initialize device
+    response = send_get_request(
+        base_url=state.base_url,
+        action_string="initialize",
+        stack_floor=state.stack_floor,
+    )
+
+    # log
+    logger.debug(response)
     logger.info("startup complete")
 
-@rest_module.shutdown()
-def inheco_shutdown(state: State):
-    """Handles cleaning up the incubaotr object. This is also an admin action"""
-    logger.info("shutdown called")
-    if state.incubator is not None:
-        state.incubator.close_connection()
-        del state.incubator
-    logger.info("shutdown complete")
 
+# HELPER FUNCTIONS
+def reset_device(state: State):  # for admin actions
+    """Resets the device
+    TODO: return step succeeded?
+    """
+    logger.info("restart called")
+    response = send_get_request(
+        base_url=state.base_url,
+        action_string="reset",
+        stack_floor=state.stack_floor,
+    )
+    logger.debug(response)
+    logger.info("restart complete")
+
+
+def send_get_request(base_url, action_string: str, stack_floor: int):
+    "Sends http get requests"
+    response = None
+    try:
+        endpoint = f"/{action_string}?stack_floor={stack_floor}"
+        request_url = f"{base_url}{endpoint}"
+        response = requests.get(request_url)
+        response.raise_for_status()
+    except Exception as e:
+        raise e
+    return response
+
+
+def send_post_request(base_url, action_string, arguments_dict=None):
+    "Sends http post requests"
+    response = None
+    try:
+        endpoint = f"/{action_string}"
+        request_url = f"{base_url}{endpoint}"
+        response = requests.post(request_url, json=arguments_dict)
+        response.raise_for_status()
+    except Exception as e:
+        raise e
+    return response
+
+
+def count_down_incubation(state: State, total_incubation_seconds: int):
+    """Counts down the incubation time and updates state"""
+    incubation_seconds_completed = 0
+
+    # count down incubation seconds and update state
+    logger.info(f"Starting incubation for {total_incubation_seconds} seconds")
+    while int(incubation_seconds_completed) < int(total_incubation_seconds):
+        time.sleep(1)
+        incubation_seconds_completed += 1
+        state.incubation_seconds_remaining = (
+            total_incubation_seconds - incubation_seconds_completed
+        )
+    logger.info("Incubation complete")
+
+    # reset the incubation_time_remaining variable for next actions
+    state.incubation_seconds_remaining = 0
+
+    # stop shaking after completed incubation
+    send_get_request(state.base_url, "stop_shaker", stack_floor=state.stack_floor)
+    logger.info("Shaker stopped after incubation")
+
+
+class IncubateParametersError(Exception):
+    """raised when incubation action parameters are invalid"""
+
+    pass
+
+
+# CUSTOM STATE HANDLER
 @rest_module.state_handler()
 def inheco_state_handler(state: State) -> ModuleState:
     """Returns the state of the Inheco device and module"""
-    incubator: Optional[Interface] = state.incubator
 
-    if incubator is None:
-        return ModuleState(
-            status=state.status,
-            error=state.error,
-        )
-
-    if not incubator.is_busy or (incubator.is_busy and state.is_incubating_only):
-        # query for fresh state details and save to cache
-        logger.debug("querying fresh state")
-        state.cached_current_shaker_active = incubator.is_shaker_active()
-        state.cached_current_heater_active = incubator.is_heater_active()
-        state.cached_current_actual_temperature = incubator.get_actual_temperature()
-        state.cached_current_target_temperature = incubator.get_target_temperature()
-    else:
-        logger.debug("using cached state")
-
-    # if the shaker is actually busy, the previous cashed values will be returned
-    return ModuleState.model_validate(
-        {
-            "status": state.status,
-            "error": state.error,
-            "target_temp": state.cached_current_target_temperature,
-            "actual_temp": state.cached_current_actual_temperature,
-            "shaker_active": state.cached_current_shaker_active,
-            "heater_active": state.cached_current_heater_active,
-            "incubation_seconds_remaining": state.incubation_seconds_remaining,
-        }
+    # request state from FastAPI endpoint
+    response = send_get_request(
+        state.base_url, action_string="get_state", stack_floor=state.stack_floor
     )
+    response.raise_for_status()
+    device_state = response.json()
+
+    if device_state:
+        return ModuleState.model_validate(
+            {
+                "status": state.status,
+                "error": state.error,
+                "target_temp": device_state["target_temp"],
+                "actual_temp": device_state["actual_temp"],
+                "shaker_active": device_state["shaker_active"],
+                "heater_active": device_state["heater_active"],
+                "incubation_seconds_remaining": state.incubation_seconds_remaining,
+            }
+        )
+    else:
+        logger.debug(
+            f"Unable to collect device state at stack floor {state.stack_floor}"
+        )
+        return ModuleState.model_validate(
+            {
+                "status": state.status,
+                "error": state.error,
+                "incubation_seconds_remaining": state.incubation_seconds_remaining,
+            }
+        )
 
 
 # OPEN TRAY ACTION
@@ -128,13 +209,23 @@ def open(
     action: ActionRequest,
 ) -> StepResponse:
     """Opens the Inheco incubator tray"""
-
-    # disable the shaker if shaking
     logger.info("open called")
-    if state.cached_current_shaker_active:
-        state.incubator.disable_shaker()
-    state.incubator.open_door()
+
+    # stop the shaker if running
+    response = send_get_request(
+        state.base_url, action_string="stop_shaker", stack_floor=state.stack_floor
+    )
+    logger.debug("stopping shaker")
+    logger.debug(response)
+
+    # open the door
+    response = send_get_request(
+        state.base_url, action_string="open_door", stack_floor=state.stack_floor
+    )
+
+    logger.debug(response)
     logger.info("open complete")
+
     return StepResponse.step_succeeded()
 
 
@@ -144,15 +235,18 @@ def close(
     state: State,
     action: ActionRequest,
 ) -> StepResponse:
-    """Closes the Tekmatic incubator tray"""
-
+    """Closes the Inheco incubator tray"""
     logger.info("close called")
-    state.incubator.close_door()
+    response = send_get_request(
+        state.base_url, action_string="close_door", stack_floor=state.stack_floor
+    )
+    logger.debug(response)
     logger.info("close complete")
+
     return StepResponse.step_succeeded()
 
 
-# SET TEMP ACTION
+# SET TEMPERATURE ACTION
 @rest_module.action(
     name="set_temperature", description="Set target incubation temperature"
 )
@@ -164,34 +258,40 @@ def set_temperature(
         "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default",
     ] = 22.0,
     activate: Annotated[
-        bool, "(optional) turn on heating/cooling element, on = True (default), off = False"
-    ] = True,
+        bool,
+        "(optional) turn on heating/cooling element, on = True (default), off = False",
+    ] = False,
 ) -> StepResponse:
-    """Sets the temperature in Celsius on the Tekmatic incubator. If activate is set to False, heating element will turn off """
-
+    """Sets the temperature in Celsius on the Inheco incubator. If activate is set to False, heating element will turn off"""
     logger.info("set temperature called")
+
+    # set the target temperature
     try:
-        response = state.incubator.set_target_temperature(float(temperature))
-
-        if activate:
-            state.incubator.start_heater()
-        else:
-            state.incubator.stop_heater()
-
-        if response == "":
-            logger.info("set temperature complete")
-            return StepResponse.step_succeeded()
-        else:
-            logger.error(f"Set temperature action failed, unsuccessful response: {response}")
-            return StepResponse.step_failed(
-                error=f"Set temperature action failed, unsuccessful response: {response}"
-            )
-
+        payload = TemperatureRequest(
+            stack_floor=state.stack_floor, temperature=temperature
+        )
+        payload_dict = payload.model_dump()
+        response = send_post_request(
+            state.base_url, "set_target_temperature", arguments_dict=payload_dict
+        )
+        print(response)
     except Exception as e:
-        logger.error(f"Error in set_temperature action: {e}")
-        logger.error(traceback.format_exc())
-        print(f"Error in set_temperature action: {e}")
-        return StepResponse.step_failed(error="Set temperature action failed")
+        return StepResponse.step_failed(error=str(e))
+
+    # turn on/off the heater
+    # NOTE: there is a bug in the WEI dashboard, activate is passed in as string, not boolean, thus "false"(str) => True(bool)
+    try:
+        if activate:
+            response = send_get_request(
+                state.base_url, "start_heater", stack_floor=state.stack_floor
+            )
+        else:
+            response = send_get_request(
+                state.base_url, "stop_heater", stack_floor=state.stack_floor
+            )
+    except Exception as e:
+        return StepResponse.step_failed(error=str(e))
+    return StepResponse.step_succeeded()
 
 
 # INCUBATE ACTION
@@ -218,11 +318,23 @@ def incubate(
     """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
 
     logger.info("incubate called")
-    # set the temperature and activate heating
+
+    # set temperature
     try:
-        state.incubator.set_target_temperature(temperature)
-        state.incubator.start_heater()
+        # set temperature parameters
+        payload = TemperatureRequest(
+            stack_floor=state.stack_floor, temperature=temperature
+        )
+        payload_dict = payload.model_dump()
+        send_post_request(
+            state.base_url, "set_target_temperature", arguments_dict=payload_dict
+        )
+
+        # start the heater
+        send_get_request(state.base_url, "start_heater", stack_floor=state.stack_floor)
+
         logger.info("heater set and started")
+
     except Exception as e:
         logger.error(f"Error starting heater in incubate action: {e}")
         logger.error(traceback.format_exc())
@@ -231,11 +343,30 @@ def incubate(
             error="Failed to set temperature in incubate action"
         )
 
+    # set shaker
     try:
-        if not shaker_frequency == 0:   # don't start the shaker if user sets shaker frequency to 0
-            state.incubator.set_shaker_parameters(frequency=shaker_frequency)
-            state.incubator.start_shaker()
+        if (
+            not shaker_frequency == 0
+        ):  # don't start the shaker if user sets shaker frequency to 0
+            # set the shaker parameters
+            payload = SetShakerParametersRequest(
+                stack_floor=state.stack_floor, frequency=shaker_frequency
+            )
+            payload_dict = payload.model_dump()
+            send_post_request(
+                state.base_url, "set_shaker_parameters", arguments_dict=payload_dict
+            )
+
+            # start shaker (status = "ND" means shake without checking for labware)
+            payload = StartShakerRequest(stack_floor=state.stack_floor, status="ND")
+            payload_dict = payload.model_dump()
+            send_post_request(
+                base_url=state.base_url,
+                action_string="start_shaker",
+                arguments_dict=payload_dict,
+            )
             logger.info("shaker set and started")
+
     except Exception as e:
         logger.error(f"Error starting shaker in incubate action: {e}")
         logger.error(traceback.format_exc())
@@ -244,36 +375,36 @@ def incubate(
             error=f"Failed to set shaker parameters or start shaking in incubate action: {traceback.format_exc()}"
         )
 
-    if not wait_for_incubation_time:
-        logger.info("incubate call complete - not waiting for incubation time")
+    # incubate
+    try:
+        if wait_for_incubation_time:
+            if incubation_time:
+                # call countdown incubation time in SAME process
+                count_down_incubation(
+                    state=state, total_incubation_seconds=incubation_time
+                )
+            else:
+                raise IncubateParametersError(
+                    "You must specify incubation_time if wait_for_incubation is True"
+                )
+        else:
+            if incubation_time:
+                # call countdown incubation time in DIFFERENT process
+                thread = Thread(
+                    target=count_down_incubation,
+                    args=(state, incubation_time),
+                    daemon=True,
+                )
+                thread.start()
+            else:
+                # return success immediately, user can heat and shake indefinitely
+                pass
         return StepResponse.step_succeeded()
-    else:
-        logger.info("incubation call - waiting for incubation time to finish")
-        incubation_seconds_completed = 0
-        total_incubation_seconds = None
-        if incubation_time:
-            total_incubation_seconds = incubation_time
 
-        print(f"Incubation action: Starting incubation for {incubation_time} seconds")
-
-        while incubation_seconds_completed < total_incubation_seconds:
-            time.sleep(1)
-            incubation_seconds_completed += 1
-            state.incubation_seconds_remaining = (
-                total_incubation_seconds - incubation_seconds_completed
-            )
-        logger.info("incubation time complete")
-
-        # reset the incubation_time_remaining variable for next actions
-        state.incubation_seconds_remaining = 0
-
-        # stop shaking after incubation complete
-        state.incubator.stop_shaker()
-
-        print("Incubation action: Incubation complete")
-
-        logger.info("incubation completes")
-        return StepResponse.step_succeeded()
+    except Exception as e:
+        logger.error("Error starting incubation")
+        logger.debug(traceback.format_exc())
+        return StepResponse.step_failed(f"Error starting incubation: {e}")
 
 
 # ****************#
@@ -305,8 +436,7 @@ By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This ca
 # def reset(state: State):
 #     """Support resetting the module.
 #     This should clear errors and reconnect to/reinitialize the device, if possible"""
-#     state.tekmatic.reset_device()
-#     state.tekmatic.initialize()
+#     pass
 
 # default LOCK and UNLOCK actions are sufficient
 
