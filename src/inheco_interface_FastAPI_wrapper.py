@@ -295,7 +295,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--host",
         type=str,
-        default="0.0.0.0",
+        default="127.0.0.1",
         help="host computer IP for the interface API",
     )
     parser.add_argument(
