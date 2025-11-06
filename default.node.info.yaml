@@ -78,6 +78,47 @@ actions:
     accepts_var_kwargs: false
     var_args_schema: null
     var_kwargs_schema: null
+  incubate:
+    name: incubate
+    description: Starts incubation at the specified temperature, optionally shakes,
+      and optionally blocks all other actions until incubation complete
+    args:
+      temperature:
+        name: temperature
+        description: temperature in celsius to one decimal point. 0.0 - 80.0 are valid
+          inputs, 22.0 default
+        argument_type: float
+        required: false
+        default: 22.0
+      shaker_frequency:
+        name: shaker_frequency
+        description: shaker frequency in Hz (1Hz = 60rpm). 0 (no shaking) and 6.6-30.0
+          are valid inputs, default is 14.2 Hz
+        argument_type: float
+        required: false
+        default: 14.2
+      wait_for_incubation_time:
+        name: wait_for_incubation_time
+        description: True if action should block until the specified incubation time
+          has passed, False to continue immediately after starting the incubation
+        argument_type: bool
+        required: false
+        default: false
+      incubation_time:
+        name: incubation_time
+        description: Time to incubate in seconds
+        argument_type: int
+        required: false
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: default.node.yaml
   node_info_path: null
