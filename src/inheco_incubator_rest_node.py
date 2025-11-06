@@ -17,6 +17,7 @@ from madsci.node_module.rest_node_module import RestNode
 import logging
 import time
 import traceback
+import threading
 from threading import Thread
 
 import requests
@@ -31,8 +32,15 @@ from pydantic_models import (
 """
 TODOs: 
 - Add admin actions 
+    - DEBUG: why is cancel admin action showing as not allowed in dashboard?
+    - reset admin action
 
 
+- TASK: open issue for dashboard buttons not recognizing when new admin actions are availible
+- MADSci: shutdown node admin action through the dashboard throws an error 
+[11/06/25 14:11:20] ERROR    {"event_id":"01K9DCQ33C04398BY327J401CF","event_type":"node_error","log_level":40,"alert":false,"event_timestamp":"2025-11-06T14:11:20.556096","source":{"node_id":"01K9D64HNJWAJ1KAX0XG0B0FER"},"event_data":{"message":"RestNode.shutdown() missing 1
+                             required positional argument: 'background_tasks'","logged_at":"2025-11-06T14:11:20.556096","error_type":"TypeError"}}
+    - TASK: open MADSci issue for error with node shutdown
 
 """
 
@@ -43,7 +51,7 @@ class InhecoNodeConfig(RestNodeConfig):
     """device ID of the Inheco Incubator device"""
     stack_floor: int = 0
     """stack floor of the Inheco Incubator device"""
-    interface_host: str = "127.0.0.0"   # TODO: should this be 127.0.0.1?
+    interface_host: str = "127.0.0.1"   # TODO: should this be 127.0.0.1, was 127.0.0.0?
     """Inheco Interface FastAPI server host"""
     interface_port: int = 7000
     """Inheco Interface FastAPI server port"""
@@ -57,12 +65,6 @@ class InhecoNode(RestNode):
     config: InhecoNodeConfig = InhecoNodeConfig()
     module_version = "1.1.0"
 
-    def __init__(self) -> None:   # TODO: necessary?
-        """Initializes the Inheco node."""
-        super().__init__()
-
-        # # set up logger # TODO: Necessary if we inherit logger?
-        # self.logger = logging.getLogger(__name__)
 
     # LIFECYCLE AND RESOURCE FUNTIONS -----------------------------------
     def startup_handler(self) -> None: 
@@ -80,8 +82,10 @@ class InhecoNode(RestNode):
 
         self.is_incubating_only = False
         self.incubation_seconds_remaining = 0
+        self.end_incubation_time = None
         self.incubate_thread = None
-        # self.stack_floor = self.stack_floor
+        # self.cancelled = False
+        self.stop_incubation_event = threading.Event()
 
         self.logger.log_info("startup called")
 
@@ -183,15 +187,31 @@ class InhecoNode(RestNode):
 
     def count_down_incubation(self, total_incubation_seconds: int):
         """Counts down the incubation time and updates state"""
-        incubation_seconds_completed = 0
+
+        # TODO: use time delta, not elapsed
+
+        elapsed = 0
+        check_interval = 1    # Check every second
 
         # count down incubation seconds and update state
         self.logger.log_info(f"Starting incubation for {total_incubation_seconds} seconds")
-        while int(incubation_seconds_completed) < int(total_incubation_seconds):
-            time.sleep(1)
-            incubation_seconds_completed += 1
+
+        start_incubation_time = time.time()
+        self.end_incubation_time = start_incubation_time + total_incubation_seconds
+
+        while time.time() < self.end_incubation_time:
+
+            # check if we should stop
+            if self.cancelled: 
+                # reset canceled
+                self.cancelled = False
+                return ActionCancelled()
+
+            time.sleep(check_interval)
+
+            elapsed += check_interval
             self.incubation_seconds_remaining = (
-                total_incubation_seconds - incubation_seconds_completed
+                total_incubation_seconds - elapsed
             )
         self.logger.log_info("Incubation complete")
 
@@ -268,7 +288,7 @@ class InhecoNode(RestNode):
             if activate:
                 response = self.send_get_request(action_string="start_heater")
             else:
-                response = self.send_get_request("stop_heater")
+                response = self.send_get_request(action_string="stop_heater")
         except Exception as e:
             return ActionFailed(errors=[f"Error setting heater: {e}"])
         
@@ -294,6 +314,7 @@ class InhecoNode(RestNode):
         """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
 
         self.logger.log_info("incubate called")
+        self.cancelled = False
 
         # set temperature
         try:
@@ -351,7 +372,7 @@ class InhecoNode(RestNode):
             if wait_for_incubation_time:
                 if incubation_time:
                     # call countdown incubation time in SAME process
-                    self.count_down_incubation(total_incubation_seconds=incubation_time)
+                    return self.count_down_incubation(total_incubation_seconds=incubation_time)
                 else:
                     return ActionFailed(errors="You must specify incubation_time if wait_for_incubation is True")
             else:
@@ -359,10 +380,11 @@ class InhecoNode(RestNode):
                     # call countdown incubation time in DIFFERENT process
                     self.incubate_thread = Thread(
                         target=self.count_down_incubation,
-                        args=(incubation_time),
+                        args=[incubation_time],
                         daemon=True,
                     )
                     self.incubate_thread.start()
+
                 else:
                     # return success immediately, user can heat and shake indefinitely
                     pass
@@ -376,30 +398,45 @@ class InhecoNode(RestNode):
     # ADMIN ACTIONS ---------------------------------------------
     def reset(self) -> AdminCommandResponse:
         """Resets the inheco incubator node"""
-        pass
 
+        try: 
+            # cancel any running incubation
+            self.cancel()
 
+            # turn heater off if running
+            if self.node_state["heater_active"] == "true":
+                response = self.send_get_request(action_string="stop_heater")
+                self.logger.log_debug("stopping heater")
+                self.logger.log_debug(response)
+            else: 
+                self.logger.log("Heater not active, no need to deactivate it")
 
-        # try:
-        #     self.hidex_interface.StopAssay()
-        #     self.cancelled = True
-        #     return AdminCommandResponse(
-        #         success=True,
-        #     )
-        # except Exception as e:
-        #     self.logger.log_error(f"Error cancelling assay: {e}")
-        #     return AdminCommandResponse(success=False, errors=[e])
+            return super().reset()
+        
+        except Exception as e:
+            self.logger.log_error(f"Error resetting node: {e}")
+            return AdminCommandResponse(success=False, errors=[e])
 
     def cancel(self) -> AdminCommandResponse:
         """Cancels the current action, probably incubation"""
 
-        pass
+        try: 
+            # Cancel the incubation countdown 
+            # self.cancelled = True
+            self.cancelled = True
 
-       #  try: 
-            # kill any running incubation thread
+            self.end_incubation_time = time.time()
+            self.incubation_seconds_remaining = 0
+        
+            # return that admin command executed successfully
+            return AdminCommandResponse(success=True)
 
 
-            
+        except Exception as e:
+            self.logger.log_error(f"Error from cancel admin action: {e}")
+            return AdminCommandResponse(success=False, errors=[e])
+
+
 
 if __name__ == "__main__": 
     inheco_node = InhecoNode()

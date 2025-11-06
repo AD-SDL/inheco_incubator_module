@@ -18,6 +18,7 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
+  - cancel
   - lock
   - reset
   - shutdown
@@ -197,7 +198,7 @@ config_schema:
       title: Stack Floor
       type: integer
     interface_host:
-      default: 127.0.0.0
+      default: 127.0.0.1
       title: Interface Host
       type: string
     interface_port:
