@@ -1,3 +1,5 @@
+exclude: '^examples/(example_interface_usage\.py|example_madsci_workflow\.yaml)$'
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

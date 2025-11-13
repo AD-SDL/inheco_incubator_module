@@ -15,7 +15,7 @@ device_stack = inheco_incubator_interface.Interface(port="COM5")
 # you can also specify dll path and Com port like this...
 # device_stack = inheco_incubator_interface.Interface(port="COM5", dll_path=r"C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll")
 
-print("initilizing both devices")
+print("Initializing both devices")
 device_stack.initialize_device(stack_floor=0)
 device_stack.initialize_device(stack_floor=1)
 

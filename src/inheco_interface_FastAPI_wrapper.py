@@ -5,6 +5,7 @@ FastAPI wrapper for Inheco incubator interface
 import argparse
 import logging
 import threading
+from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI, Query
@@ -31,7 +32,7 @@ logging.basicConfig(
 
 
 # GENERAL ACTIONS
-def create_app(device: int, dll_path: str):
+def create_app(device: int, dll_path: str) -> FastAPI:
     """Created the app and opens connection to the specified COM port"""
     global config
     config["device"] = device
@@ -40,13 +41,13 @@ def create_app(device: int, dll_path: str):
 
 
 @app.get("/")
-def read_root():
+def read_root() -> dict[str, str]:
     """Displays message on root endpoint"""
     return {"message": f"Running with device(s) on COM port {config['device']}"}
 
 
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
     "Called on start up of the FAST API"
     # TODO: app.on_event deprecated. switch to lifespan events
     global device
@@ -58,14 +59,14 @@ async def startup_event():
 
 
 @app.get("/initialize", summary="initializes incubator at specified stack_floor")
-def initialize(stack_floor: int = Query(..., description="Stack floor number")):
+def initialize(stack_floor: int = Query(..., description="Stack floor number")) -> None:
     """Initializes the device"""
     device.initialize_device(stack_floor=stack_floor)
     logger.info(f"device initialized @ stack floor {stack_floor}")
 
 
 @app.get("/reset", summary="resets the incubator at specified stack_floor")
-def reset(stack_floor: int = Query(..., description="Stack floor number")):
+def reset(stack_floor: int = Query(..., description="Stack floor number")) -> None:
     """Resets the device"""
     device.reset_device(stack_floor=stack_floor)
     logger.info(f"device reset @ stack floor {stack_floor}")
@@ -75,7 +76,9 @@ def reset(stack_floor: int = Query(..., description="Stack floor number")):
     "/report_error_flags",
     summary="reports any error flags present on incubator at specified stack_floor (0 = no errors)",
 )
-def report_error_flags(stack_floor: int = Query(..., description="Stack floor number")):
+def report_error_flags(
+    stack_floor: int = Query(..., description="Stack floor number"),
+) -> str:
     """Reports any error flags present"""
     response = device.report_error_flags(stack_floor=stack_floor)
     logger.info(f"Reported error flags @ stack floor {stack_floor}: {response}")
@@ -87,7 +90,9 @@ def report_error_flags(stack_floor: int = Query(..., description="Stack floor nu
     "/get_state",
     summary="returns the state of incubator device at the specified stack_floor",
 )
-def get_state(stack_floor: int = Query(..., description="Stack floor number")):
+def get_state(
+    stack_floor: int = Query(..., description="Stack floor number"),
+) -> dict[str, Optional[Any]]:
     """Returns the incubator state"""
     logger.info("getting state")
 
@@ -103,42 +108,37 @@ def get_state(stack_floor: int = Query(..., description="Stack floor number")):
             logger.debug(
                 f"device known, not busy. state = {cached_states[stack_floor]}"
             )
+    elif device.is_busy:
+        # save empty state information into cached states
+        cached_states[stack_floor] = {
+            "target_temp": None,
+            "actual_temp": None,
+            "shaker_active": None,
+            "heater_active": None,
+        }
+        logger.debug(f"device unknown and busy. state = {cached_states[stack_floor]}")
     else:
-        if device.is_busy:
-            # save empty state information into cached states
-            cached_states[stack_floor] = {
-                "target_temp": None,
-                "actual_temp": None,
-                "shaker_active": None,
-                "heater_active": None,
-            }
-            logger.debug(
-                f"device unknown and busy. state = {cached_states[stack_floor]}"
-            )
-        else:
-            # query device for state information and save to cached states
-            cached_states[stack_floor] = {
-                "target_temp": device.get_target_temperature(stack_floor=stack_floor),
-                "actual_temp": device.get_actual_temperature(stack_floor=stack_floor),
-                "shaker_active": device.is_shaker_active(stack_floor=stack_floor),
-                "heater_active": device.is_heater_active(stack_floor=stack_floor),
-            }
-            logger.debug(
-                f"device unknown, not busy. state = {cached_states[stack_floor]}"
-            )
+        # query device for state information and save to cached states
+        cached_states[stack_floor] = {
+            "target_temp": device.get_target_temperature(stack_floor=stack_floor),
+            "actual_temp": device.get_actual_temperature(stack_floor=stack_floor),
+            "shaker_active": device.is_shaker_active(stack_floor=stack_floor),
+            "heater_active": device.is_heater_active(stack_floor=stack_floor),
+        }
+        logger.debug(f"device unknown, not busy. state = {cached_states[stack_floor]}")
     return cached_states[stack_floor]
 
 
 # DOOR ACTIONS
 @app.get("/open_door", summary="opens the incubator door at specified stack_floor")
-def open_door(stack_floor: int = Query(..., description="Stack floor number")):
+def open_door(stack_floor: int = Query(..., description="Stack floor number")) -> None:
     """Opens the door"""
     device.open_door(stack_floor=stack_floor)
     logger.info(f"door opened @ stack floor {stack_floor}")
 
 
 @app.get("/close_door", summary="closes the incubator door at specified stack_floor")
-def close_door(stack_floor: int = Query(..., description="Stack floor number")):
+def close_door(stack_floor: int = Query(..., description="Stack floor number")) -> None:
     """Closes the door"""
     device.close_door(stack_floor=stack_floor)
     logger.info(f"door closed @ stack floor {stack_floor}")
@@ -206,7 +206,7 @@ def get_target_temperature(
     "/set_target_temperature",
     summary="Sets the target temperature of the incubator at the specified stack floor",
 )
-def set_target_temperature(request: TemperatureRequest):
+def set_target_temperature(request: TemperatureRequest) -> None:
     """Sets the target temperature"""
     device.set_target_temperature(
         stack_floor=request.stack_floor, temperature=request.temperature
@@ -221,7 +221,9 @@ def set_target_temperature(request: TemperatureRequest):
     "/start_heater",
     summary="turns on the incubator heater at the specified stack floor",
 )
-def start_heater(stack_floor: int = Query(..., description="Stack floor number")):
+def start_heater(
+    stack_floor: int = Query(..., description="Stack floor number"),
+) -> None:
     """Starts the heater"""
     device.start_heater(stack_floor=stack_floor)
     logger.info(f"heater started @ stack floor {stack_floor}")
@@ -231,7 +233,9 @@ def start_heater(stack_floor: int = Query(..., description="Stack floor number")
     "/stop_heater",
     summary="turns off the incubator heater at the specified stack floor",
 )
-def stop_heater(stack_floor: int = Query(..., description="Stack floor number")):
+def stop_heater(
+    stack_floor: int = Query(..., description="Stack floor number"),
+) -> None:
     """Stops the heater"""
     device.stop_heater(stack_floor=stack_floor)
     logger.info(f"heater stopped @ stack floor {stack_floor}")
@@ -252,14 +256,16 @@ def is_heater_active(
 
 # SHAKER COMMANDS
 @app.post("/start_shaker", summary="starts shaker at the specified stack floor")
-def start_shaker(request: StartShakerRequest):
+def start_shaker(request: StartShakerRequest) -> None:
     """Starts the heater"""
     device.start_shaker(stack_floor=request.stack_floor, status=request.status)
     logger.info(f"shaker started @ stack floor {request.stack_floor}")
 
 
 @app.get("/stop_shaker", summary="stops shaker at the specified stack floor")
-def stop_shaker(stack_floor: int = Query(..., description="Stack floor number")):
+def stop_shaker(
+    stack_floor: int = Query(..., description="Stack floor number"),
+) -> None:
     """Stops the shaker"""
     device.stop_shaker(stack_floor=stack_floor)
     logger.info(f"shaker stopped @ stack floor {stack_floor}")
@@ -269,7 +275,9 @@ def stop_shaker(stack_floor: int = Query(..., description="Stack floor number"))
     "/is_shaker_active",
     summary="Determines if shaker is active at specified stack floor (True = active, False = inactive).",
 )
-def is_shaker_active(stack_floor: int = Query(..., description="Stack floor number")):
+def is_shaker_active(
+    stack_floor: int = Query(..., description="Stack floor number"),
+) -> bool:
     """Determines if shaker is active"""
     response = device.is_shaker_active(stack_floor=stack_floor)
     logger.info(f"shaker status @ stack floor {stack_floor}: {response}")
@@ -280,7 +288,7 @@ def is_shaker_active(stack_floor: int = Query(..., description="Stack floor numb
     "/set_shaker_parameters",
     summary="Sets the shaker parameters at the specified stack floor",
 )
-def set_shaker_parameters(request: SetShakerParametersRequest):
+def set_shaker_parameters(request: SetShakerParametersRequest) -> None:
     """Sets the shaker parameters"""
     device.set_shaker_parameters(
         stack_floor=request.stack_floor, frequency=request.frequency
