@@ -1,7 +1,0 @@
-node_name: inheco
-node_id:
-node_description: A node definition for BMG plate reader
-node_type: device
-module_name: inheco_incubator_module
-module_version: 1.1.0
-capabilities: null

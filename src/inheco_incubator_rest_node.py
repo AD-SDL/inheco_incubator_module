@@ -98,10 +98,9 @@ class InhecoNode(RestNode):
 
         self.resource_client.create_template(
             resource=Slot(
-                resource_class="inheco_plate_nest",
                 resource_description="The plate nest for an Inheco microplate reader",
             ),
-            template_name="inheco_plate_nest",
+            template_name="inheco.nest",
             description="Template of an Inheco microplate reader plate nest",
             tags=["PlateNest", "ANSI/SLAS"],
         )
@@ -110,8 +109,8 @@ class InhecoNode(RestNode):
         """Create resources for the node module."""
 
         self.plate_carrier = self.resource_client.create_resource_from_template(
-            "inheco_plate_nest",
-            resource_name=f"{self.node_definition.node_name}_plate_nest_stack_floor_{self.config.stack_floor}",
+            template_name="inheco.nest",
+            resource_name=f"{self.node_definition.node_name}.nest",
         )
 
     # CUSTOM STATE HANDLER
