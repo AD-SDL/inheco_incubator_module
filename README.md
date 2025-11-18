@@ -1,8 +1,8 @@
 # Inheco Single Plate Incubator Shaker Module
 
-A WEI-powered module for controlling Inheco Single Plate Incubator Shakers, both the microplate and deep well plate versions.
+A MADSci-powered module for controlling Inheco Single Plate Incubator Shakers, both the microplate and deep well plate versions.
 
-Contains an Inheco incubator interface (inheco_incubator_interface.py), a FastAPI wrapper for the interface functions (inheco_interface_FastAPI_wrapper.py), and an Inheco incubator REST node (inheco_incubator_module.py).
+Contains an Inheco incubator interface (inheco_incubator_interface.py), a FastAPI wrapper for the interface functions (inheco_interface_FastAPI_wrapper.py), and an Inheco incubator REST node (inheco_incubator_rest_node.py).
 
 ### General notes on structure
 
@@ -15,14 +15,20 @@ You could have multiple stacks of incubators following this same pattern.
 
 Inheco incubators run on Windows systems. See device documentation on system requirements for more details.
 
-Before using Inheco incubator(s), you will need to clone the module GitHub repo and install the dependencies. Use the code below to complete this step.
+Before using Inheco incubator(s), you will need to clone the module GitHub repo and install the dependencies in a virtual environment. Use the code below to complete this step.
 
 General install instructions:
 
+    # Clone the repository
     git clone https://github.com/AD-SDL/inheco_incubator_module.git
     cd inheco_incubator_module
-    pip install -e .
 
+    # Create and activate a Python virtual environment
+    python -m venv .venv
+    .venv\Scripts\activate
+
+    # Install the dependencies
+    pip install -e .
 
 ### Running the interface
 
@@ -74,26 +80,25 @@ Once the FastAPI Wrapper is running, you can go to the docs of your server to te
 
 ### Running the REST Node
 
-If you would like to run these devices through WEI, you will need to start one WEI REST Node for each individual device, even if they are in the same stack.
+If you would like to run these devices through MADSci, you will need to start one MADSci REST Node for each individual device, even if they are in the same stack.
 
-Each WEI REST Node can be started with a command in the format below, making sure to adjust the stack floor argument for each device:
+Each MADSci REST Node can be started with a command in the format below, making sure to adjust the stack floor and node_url arguments for each device:
 
-    python your\\path\\to\\inheco_incubator_module.py --port <Port over which to communicate with WEI> --device_id <(optional) device ID of the Inheco incubator device> --stack_floor <(optional) stack floor of the Inheco incubator device> --interface_host <(optional) Inheco Interface FastAPI server host> --interface_port <(optional) Inheco Interface FastAPI server port> --port <Port over which to communicate with WEI>
+    python your\\path\\to\\inheco_incubator_module.py --node_url <(optional str) address for your incubator MADSci REST Node>> --device_id <(optional int) device ID of the Inheco incubator device> --stack_floor <(optional int) stack floor of the Inheco incubator device> --interface_host <(optional str) Inheco Interface FastAPI server host> --interface_port <(optional int) Inheco Interface FastAPI server port> 
 
---device_id will default to 2, --stack_floor will default to 0, --interface_host will default to 127.0.0.0, and --interface_port will default to 7000 unless specified. You must specify --port.
+--node_url will default to "http://127.0.0.1:2000", --device_id will default to 2, --stack_floor will default to 0, --interface_host will default to 127.0.0.1, and --interface_port will default to 7000 unless specified.
 
 Example usage with no optional arguments (assumes no changes needed to defaults):
 
     python inheco_incubator_module.py
 
-
 Example usage with all optional arguments:
 
-    python inheco_incubator_module.py --port 3005 --device_id 2 --stack_floor 0 --interface_host "localhost" --interface_port 7000
+    python inheco_incubator_module.py --node_url "http://127.0.0.1:3005" --device_id 2 --stack_floor 0 --interface_host "localhost" --interface_port 7000 
 
 
 ### Example Usage in WEI Workflow YAML file
 
-The link below shows an example of a YAML WEI Workflow file that could interact with the Inheco Single Plate Incubator Shaker module.
+The link below shows an example of a YAML MADSci Workflow file that could interact with the Inheco Single Plate Incubator Shaker module.
 
-[Example WEI usage](https://github.com/AD-SDL/inheco_incubator_module/blob/main/examples/wei_workflow_usage_example.yaml)
+[Example MADSci usage](https://github.com/AD-SDL/inheco_incubator_module/blob/main/examples/example_madsci_workflow.yaml)
