@@ -116,26 +116,30 @@ class InhecoNode(RestNode):
     # CUSTOM STATE HANDLER
     def state_handler(self) -> None:
         """Periodically checks the state of the Inheco device and module"""
-
-        # request state from FastAPI endpoint
-        response = self.send_get_request(action_string="get_state")
-        response.raise_for_status()
-        device_state = response.json()
-        if device_state:
-            self.node_state = {
-                "target_temp": device_state["target_temp"],
-                "actual_temp": device_state["actual_temp"],
-                "shaker_active": device_state["shaker_active"],
-                "heater_active": device_state["heater_active"],
-                "incubation_seconds_remaining": self.incubation_seconds_remaining,
-            }
-        else:
-            self.logger.log_debug(
-                f"Unable to collect device state at stack floor {self.config.stack_floor}"
-            )
-            self.node_state = {
-                "incubation_seconds_remaining": self.incubation_seconds_remaining,
-            }
+        
+        try: 
+            # request state from FastAPI endpoint
+            response = self.send_get_request(action_string="get_state")
+            response.raise_for_status()
+            device_state = response.json()
+            if device_state:
+                self.node_state = {
+                    "target_temp": device_state["target_temp"],
+                    "actual_temp": device_state["actual_temp"],
+                    "shaker_active": device_state["shaker_active"],
+                    "heater_active": device_state["heater_active"],
+                    "incubation_seconds_remaining": self.incubation_seconds_remaining,
+                }
+            else:
+                self.logger.log_debug(
+                    f"Unable to collect device state at stack floor {self.config.stack_floor}"
+                )
+                self.node_state = {
+                    "incubation_seconds_remaining": self.incubation_seconds_remaining,
+                }
+        
+        except Exception as e: 
+            self.logger.log_error(f"Error collecting state information in state handler: {e}")
 
     def shutdown_handler(self) -> None:  # TODO: default is probably sufficient
         """Handles node shutdown procedure"""
