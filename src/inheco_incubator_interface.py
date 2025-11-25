@@ -26,8 +26,7 @@ class Interface:
     ) -> None:
         """Opens the connection to the incubator.
 
-        Note: No need to initialize here. Initialization completed
-        on startup of each module
+        No need to initialize here. Initialization is completed on startup of each module. 
         """
         # set up logger
         self.port = port  # COM port of the device(s)
@@ -72,11 +71,11 @@ class Interface:
 
     def reset_device(self, stack_floor: int) -> str:
         """Resets the Inheco Single Plate Incubator Device
-        Note: seems to respond 88 regardless of success or failure
+        Note: Seems to respond 88 regardless of success or failure.
         """
         response = self.send_message(
             "SRS", stack_floor=stack_floor, read_delay=5
-        )  # wait 5 seconds before reading response
+        )
         self.logger.info("device reset")
         return response
 
@@ -92,7 +91,7 @@ class Interface:
     # TEMPERATURE CONTROL
     def get_actual_temperature(self, stack_floor: int) -> float:
         """Returns the actual temperature as measured by main sensor on incubator (sensor 1).
-        Note: There are two other sensors that we don't report. Get their values with "RAT2" and "RAT3" """
+        Note: There are two other sensors that we don't report. Get their values with "RAT2" and "RAT3"""
         response = self.send_message("RAT", stack_floor=stack_floor)
         temperature = float(response) / 10
         self.logger.info(f"get actual temperature: {temperature}")
@@ -110,7 +109,15 @@ class Interface:
         stack_floor: int,
         temperature: Optional[float] = 22.0,
     ) -> None | str:
-        """Sets the target temperature, if no temperature specified, defaults to 22 deg C"""
+        """Sets the target temperature.  If no temperature specified, temperature defaults to 22 deg Celsius.
+        
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
+            temperature (float, optional): Temperature in degrees Celsius
+
+        Returns: 
+            response (str or None): returns a string response if temperature input is valid, None otherwise.
+        """
         if 0 <= (int(temperature * 10)) <= 800:
             self.logger.info("setting target temperature")
             message = "STT" + str(int(temperature * 10))
@@ -120,24 +127,37 @@ class Interface:
         self.logger.error(
             "Error: temperature input invalid in set_target_temperature method"
         )
-        return None  # TODO: Does this work correctly?
+        return None
 
     def start_heater(self, stack_floor: int) -> None:
         """Enables the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
+
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
         """
         self.send_message("SHE1", stack_floor=stack_floor)
         self.logger.info("started heater")
 
     def stop_heater(self, stack_floor: int) -> None:
         """Disable the device heating element.
-        Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
+
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
+    
         """
         self.send_message("SHE", stack_floor=stack_floor)
         self.logger.info("stopped heater")
 
     def is_heater_active(self, stack_floor: int) -> bool:
-        """Returns True if heater/cooler is activated, otherwise False"""
+        """Check state of heating element. 
+
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
+        
+        Returns: 
+            (bool) True if heater/cooler is activated, False otherwise. 
+        """
         response = self.send_message("RHE", stack_floor=stack_floor)
 
         try:
@@ -146,7 +166,7 @@ class Interface:
                 return False
             if response in [1, 2]:  # 1 = on, 2 = on with booster
                 return True
-            raise Exception("Unexpected integer response from is_heater_active query")
+            raise Exception("Unexpected integer response from is_heater_active query.")
         except Exception as e:
             self.logger.error(
                 f"Unable to parse is_heater_active response: {response}. {traceback.format_exc()}"
@@ -155,85 +175,94 @@ class Interface:
 
     # DOOR ACTIONS
     def open_door(self, stack_floor: int) -> None:
-        """Opens the door"""
+        """Opens the door. 
+
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
+        """
         self.send_message(
             "AOD",
             stack_floor=stack_floor,
             read_delay=6,
         )  # wait 6 seconds before reading com response
-        self.logger.info("opened door")
+        self.logger.info("Opened door.")
 
     def close_door(self, stack_floor: int) -> None:
-        """Closes the door"""
+        """Closes the door. 
+        
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
+        """
         self.send_message(
             "ACD",
             stack_floor=stack_floor,
             read_delay=7,
-        )  # wait 7 seconds before reading com response
-        self.logger.info("closed door")
+        )
+        self.logger.info("Closed door.")
 
     def report_door_status(self, stack_floor: int) -> str:
         """Determines if front incubator door is open.
 
-        TODO: return true/false?
-        TODO: covert to int before returning?
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
 
-        Responses:
-            0 = door closed
-            1 = door open
+        Returns: (str)
+            Responses:
+                0 = door closed
+                1 = door open
         """
         response = self.send_message("RDS", stack_floor=stack_floor)
         self.logger.debug(f"door status (0 closed, 1 open): {response}")
         return response
 
     def report_labware(self, stack_floor: int) -> str:
-        """Determines if labware is present in incubator
+        """Determines if labware is present in incubator.
 
-        TODO: return int?
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
 
-        Responses:
-            0 = no labware present
-            1 = labware detected,
-            8 = error, door open
-            7 = error, reset and door closed
+        Returns: (str)
+            Responses:
+                0 = no labware present
+                1 = labware detected,
+                8 = error, door open
+                7 = error, reset and door closed
         """
         response = self.send_message("RLW", stack_floor=stack_floor)
-        self.logger.debug(f"report labware response: {response}")
-
+        self.logger.debug(f"Report labware response: {response}")
         return response
 
     # SHAKER COMMANDS
     def start_shaker(self, stack_floor: int, status: Optional[str] = "ND") -> None:
-        """Enables the device shaking element
+        """Enables the device shaking element.
 
-        Arguments:
-            status: (int or str) 1 = on, (str) "ND" = on without labware detection
-
-        Returns:
-            None
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
+            status: (str, optional): "1" = on, (str) "ND" = on without labware detection
         """
         if status in [1, "1", "ND"]:
             self.send_message(
                 "ASE" + str(status), stack_floor=stack_floor, read_delay=3
             )
-            self.logger.info("started shaker")
+            self.logger.info("Started shaker.")
         else:
-            self.logger.error("Value Error: invalid status in start_shaker method")
-            raise ValueError("Error: invalid status in start_shaker method")
+            self.logger.error("Value Error: Invalid status in start_shaker method.")
+            raise ValueError("Error: Invalid status in start_shaker method.")
 
     def stop_shaker(self, stack_floor: int) -> None:
         """Disables the device shaking element"""
         self.send_message("ASE0", stack_floor=stack_floor, read_delay=5)
-        self.logger.info("stopped shaker")
+        self.logger.info("Stopped shaker.")
 
     def is_shaker_active(self, stack_floor: int) -> bool:
         """Determines if incubator shaker is active.
 
-        # TODO: should we be raising exceptions here?
+        Args: 
+            stack_floor (int): Stack floor of the Inheco incubator device
 
-        Returns:
-            True = shaker is active
-            False = shaker not active
+        Returns: (bool)
+            True if shaker is active
+            False if shaker not active
         """
         response = self.send_message("RSE", stack_floor=stack_floor)
         try:
@@ -256,7 +285,7 @@ class Interface:
         amplitude: Optional[float] = 2.0,
         frequency: Optional[float] = 14.2,
     ) -> None:
-        """Sets the shaking parameters
+        """Sets the shaking parameters.
 
         Arguments:
             amplitude: (float) shaking distance in mm, 0.0-3.0 mm valid, 2.0 mm default
