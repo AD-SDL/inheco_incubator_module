@@ -6,9 +6,9 @@ authors = [{name = "Casey Stone", email="cstone@anl.gov"}]
 dependencies = [
     "fastapi>=0.103",
     "uvicorn>=0.14.0",
-    "madsci.node_module~=0.5.0",
-    "madsci.client~=0.5.0",
-    "madsci.common~=0.5.0",
+    "madsci.node_module~=0.6.0",
+    "madsci.client~=0.6.0",
+    "madsci.common~=0.6.0",
     "pytest",
     "pythonnet",
 ]
