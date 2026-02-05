@@ -1,42 +1,67 @@
-# TODO: rewrite this for MADSci!
-
-
-name: Demonstrate Inheco single plate incubator actions
+name: Example MADSci Workflow for Inheco Single Plate Incubator Shaker actions
 
 metadata:
-  author: Casey Stone
-  info: Workflow for demonstrating the inheco incubator actions
+  author: RPL
+  info: Example MADSci Workflow YAML file
   version: 0.1
 
-flowdef:
+steps:
+  # Open incubator
   - name: open incubator
-    module: inheco_devID2_stackfloor0  # Through WEI you can give each WEI REST Node module a name
+    node: inheco_incubator
     action: open
 
+  # Use other MADSci modules to place labware in the incubator here.
+
+  # Close incubator
   - name: close incubator
-    module: inheco_devID2_stackfloor0
+    node: inheco_incubator
     action: close
 
+  # Set temperature to 37 degrees Celsius
   - name: set temperature
-    module: inheco_devID2_stackfloor0
+    node: inheco_incubator
     action: set_temperature
     args:
-      temperature: 30.0
+      temperature: 37.0
       activate: True
 
-  - name: start 60 second incubation, block until finished
-    module: inheco_devID2_stackfloor0
+  # Incubate for 60 minutes (blocking action)
+  - name: incubate blocking
+    node: inheco_incubator
     action: incubate
     args:
-      temperature: 30.0
-      shaker_frequency: 10
+      temperature: 37.0 # in degrees Celsius
+      shaker_frequency: 6.6 # in Hz
       wait_for_incubation_time: True
-      incubation_time: 60
+      incubation_time: 3600 # in seconds (1 hour)
 
-  - name: start continuous incubation, non-blocking
-    module: inheco_devID2_stackfloor0
+  # Incubate for 30 minutes (non-blocking action)
+  - name: incubate non-blocking
+    node: inheco_incubator
     action: incubate
     args:
-      temperature: 30.0
-      shaker_frequency: 10
+      temperature: 37.0 # in degrees Celsius
+      shaker_frequency: 6.6 # in Hz
       wait_for_incubation_time: False
+      incubation_time: 1800 # in seconds (30 minutes)
+
+  # Open incubator
+  - name: open incubator
+    node: inheco_incubator
+    action: open
+
+  # Use other MADSci modules to remove labware from the incubator here.
+
+  # Close incubator
+  - name: close incubator
+    node: inheco_incubator
+    action: close
+
+  # Reset temperature to ambient (by deactivating temperature control)
+  - name: reset temperature
+    node: inheco_incubator
+    action: set_temperature
+    args:
+      activate: False
+

@@ -3,12 +3,12 @@ FastAPI wrapper for the Inheco incubator Python interface.
 """
 
 import argparse
-import logging
 import threading
 from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI, Query, Request
+from madsci.client.event_client import EventClient
 
 from inheco_incubator_interface import Interface
 from pydantic_models import (
@@ -22,13 +22,7 @@ app = FastAPI()
 config = {}
 cached_states = {}
 device_lock = threading.Lock()
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    filename="inheco_FastAPI.log",
-    level=logging.DEBUG,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
+logger = EventClient()
 
 
 # GENERAL ACTIONS
@@ -71,7 +65,7 @@ def read_root() -> dict[str, str]:
 @app.on_event("startup")
 async def startup_event() -> None:
     """
-    Called on start up of the FAST API. Initializes the device interface.
+    Called on start up of the FastAPI. Initializes the device interface.
     """
     global device  # noqa PLW0603
     with device_lock:
@@ -89,7 +83,7 @@ def initialize(stack_floor: int = Query(..., description="Stack floor number")) 
     Initializes the device.
     """
     device.initialize_device(stack_floor=stack_floor)
-    logger.info(f"Device initialized at stack floor {stack_floor}.")
+    logger.log_info(f"Device initialized at stack floor {stack_floor}.")
 
 
 @app.get("/reset", summary="Resets the incubator at the specified stack_floor.")
@@ -100,7 +94,7 @@ def reset(
     Resets the device.
     """
     device.reset_device(stack_floor=stack_floor)
-    logger.info(f"Device reset at stack floor {stack_floor}.")
+    logger.log_info(f"Device reset at stack floor {stack_floor}.")
 
 
 @app.get(
@@ -114,7 +108,7 @@ def report_error_flags(
     Reports any error flags present.
     """
     response = device.report_error_flags(stack_floor=stack_floor)
-    logger.info(f"Reported error flags @ stack floor {stack_floor}: {response}.")
+    logger.log_info(f"Reported error flags @ stack floor {stack_floor}: {response}.")
     return response
 
 
@@ -129,7 +123,7 @@ def get_state(
     """
     Returns the incubator state.
     """
-    logger.info("Getting state.")
+    logger.log_info("Getting state.")
 
     if stack_floor in cached_states:
         if not device.is_busy:
@@ -140,7 +134,7 @@ def get_state(
                 "shaker_active": device.is_shaker_active(stack_floor=stack_floor),
                 "heater_active": device.is_heater_active(stack_floor=stack_floor),
             }
-            logger.debug(
+            logger.log_debug(
                 f"Device known, not busy. state = {cached_states[stack_floor]}"
             )
     elif device.is_busy:
@@ -151,7 +145,9 @@ def get_state(
             "shaker_active": None,
             "heater_active": None,
         }
-        logger.debug(f"device unknown and busy. state = {cached_states[stack_floor]}")
+        logger.log_debug(
+            f"device unknown and busy. state = {cached_states[stack_floor]}"
+        )
     else:
         # Query device for state information and save to cached states.
         cached_states[stack_floor] = {
@@ -160,7 +156,9 @@ def get_state(
             "shaker_active": device.is_shaker_active(stack_floor=stack_floor),
             "heater_active": device.is_heater_active(stack_floor=stack_floor),
         }
-        logger.debug(f"Device unknown, not busy. state = {cached_states[stack_floor]}")
+        logger.log_debug(
+            f"Device unknown, not busy. state = {cached_states[stack_floor]}"
+        )
     return cached_states[stack_floor]
 
 
@@ -173,7 +171,7 @@ def open_door(
     Opens the door.
     """
     device.open_door(stack_floor=stack_floor)
-    logger.info(f"Door opened at stack floor {stack_floor}.")
+    logger.log_info(f"Door opened at stack floor {stack_floor}.")
 
 
 @app.get("/close_door", summary="Closes the incubator door at specified stack_floor.")
@@ -184,7 +182,7 @@ def close_door(
     Closes the door.
     """
     device.close_door(stack_floor=stack_floor)
-    logger.info(f"Door closed at stack floor {stack_floor}.")
+    logger.log_info(f"Door closed at stack floor {stack_floor}.")
 
 
 @app.get(
@@ -202,7 +200,7 @@ def report_door_status(
         1 = door open
     """
     door_status = device.report_door_status(stack_floor=stack_floor)
-    logger.info(f"Door status at stack floor {stack_floor}: {door_status}.")
+    logger.log_info(f"Door status at stack floor {stack_floor}: {door_status}.")
     return door_status
 
 
@@ -222,8 +220,8 @@ def report_labware(
         8 = error, door open
         7 = error, reset and door closed
     """
-    labware_status = device.report_door_status(stack_floor=stack_floor)
-    logger.info(f"Report labware at stack floor {stack_floor}: {labware_status}.")
+    labware_status = device.report_labware(stack_floor=stack_floor)
+    logger.log_info(f"Report labware at stack floor {stack_floor}: {labware_status}.")
     return labware_status
 
 
@@ -239,7 +237,7 @@ def get_actual_temperature(
     Returns the actual temperature.
     """
     temperature = device.get_actual_temperature(stack_floor=stack_floor)
-    logger.info(f"Actual temperature at stack floor {stack_floor}: {temperature}.")
+    logger.log_info(f"Actual temperature at stack floor {stack_floor}: {temperature}.")
     return temperature
 
 
@@ -254,7 +252,7 @@ def get_target_temperature(
     Returns the target temperature.
     """
     temperature = device.get_target_temperature(stack_floor=stack_floor)
-    logger.info(f"Target temperature at stack floor {stack_floor}: {temperature}.")
+    logger.log_info(f"Target temperature at stack floor {stack_floor}: {temperature}.")
     return temperature
 
 
@@ -271,7 +269,7 @@ def set_target_temperature(
     device.set_target_temperature(
         stack_floor=request.stack_floor, temperature=request.temperature
     )
-    logger.info(
+    logger.log_info(
         f"Temperature set at stack floor {request.stack_floor}: {request.temperature}."
     )
 
@@ -288,7 +286,7 @@ def start_heater(
     Starts the heater.
     """
     device.start_heater(stack_floor=stack_floor)
-    logger.info(f"Heater started at stack floor {stack_floor}.")
+    logger.log_info(f"Heater started at stack floor {stack_floor}.")
 
 
 @app.get(
@@ -302,7 +300,7 @@ def stop_heater(
     Stops the heater.
     """
     device.stop_heater(stack_floor=stack_floor)
-    logger.info(f"Heater stopped at stack floor {stack_floor}.")
+    logger.log_info(f"Heater stopped at stack floor {stack_floor}.")
 
 
 @app.get(
@@ -318,7 +316,7 @@ def is_heater_active(
     Returns: (bool) True if heater/cooler is activated, otherwise False.
     """
     response = device.is_heater_active(stack_floor=stack_floor)
-    logger.info(f"Heater status at stack floor {stack_floor}: {response}.")
+    logger.log_info(f"Heater status at stack floor {stack_floor}: {response}.")
     return response
 
 
@@ -331,7 +329,7 @@ def start_shaker(
     Starts the shaker.
     """
     device.start_shaker(stack_floor=request.stack_floor, status=request.status)
-    logger.info(f"Shaker started at stack floor {request.stack_floor}.")
+    logger.log_info(f"Shaker started at stack floor {request.stack_floor}.")
 
 
 @app.get("/stop_shaker", summary="Stops shaker at the specified stack floor.")
@@ -342,7 +340,7 @@ def stop_shaker(
     Stops the shaker.
     """
     device.stop_shaker(stack_floor=stack_floor)
-    logger.info(f"Shaker stopped at stack floor {stack_floor}.")
+    logger.log_info(f"Shaker stopped at stack floor {stack_floor}.")
 
 
 @app.get(
@@ -358,7 +356,7 @@ def is_shaker_active(
     Returns: (bool) True if shaker is activated, otherwise False.
     """
     response = device.is_shaker_active(stack_floor=stack_floor)
-    logger.info(f"Shaker status at stack floor {stack_floor}: {response}.")
+    logger.log_info(f"Shaker status at stack floor {stack_floor}: {response}.")
     return response
 
 
@@ -375,7 +373,7 @@ def set_shaker_parameters(
     device.set_shaker_parameters(
         stack_floor=request.stack_floor, frequency=request.frequency
     )
-    logger.info(
+    logger.log_info(
         f"Shaker parameters set at stack floor {request.stack_floor}: frequency = {request.frequency}."
     )
 

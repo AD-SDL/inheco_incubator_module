@@ -23,15 +23,9 @@ from pydantic_models import (
     TemperatureRequest,
 )
 
-"""
-TODO:
-- fix logging to different files
-- update README
-"""
-
 
 class InhecoNodeConfig(RestNodeConfig):
-    """Configuration for the Inheco Node."""
+    """Configuration for the Inheco REST node."""
 
     device_id: int = 2
     """Device ID of the Inheco Incubator device."""
@@ -83,7 +77,7 @@ class InhecoNode(RestNode):
 
         # Log response.
         self.logger.log_debug(response)
-        self.logger.log_info("startup complete")
+        self.logger.log_info("Startup complete.")
 
     def init_resource_templates(self) -> None:
         """
@@ -92,10 +86,10 @@ class InhecoNode(RestNode):
 
         self.resource_client.create_template(
             resource=Slot(
-                resource_description="The plate nest for an Inheco microplate reader",
+                resource_description="The plate nest for an Inheco microplate reader.",
             ),
             template_name="inheco.nest",
-            description="Template of an Inheco microplate reader plate nest",
+            description="Template of an Inheco microplate reader plate nest.",
             tags=["PlateNest", "ANSI/SLAS"],
         )
 
@@ -141,8 +135,10 @@ class InhecoNode(RestNode):
                 f"Error collecting state information in state handler: {e}."
             )
 
-    def shutdown_handler(self) -> None:  # TODO: default is probably sufficient
-        """Handles node shutdown procedure"""
+    def shutdown_handler(self) -> None:
+        """
+        Cancels any running actions and shuts down the node.
+        """
         self.cancel()
         return super().shutdown_handler()
 
@@ -150,6 +146,12 @@ class InhecoNode(RestNode):
     def send_get_request(self, action_string: str) -> requests.Response:
         """
         Sends HTTP GET requests.
+
+        Args:
+            action_string (str): The action endpoint to call.
+
+        Returns:
+            requests.Response: The response from the GET request.
         """
         response = None
         try:
@@ -170,6 +172,9 @@ class InhecoNode(RestNode):
         Args:
             action_string (str): The action endpoint to call.
             arguments_dict (dict, optional): The arguments to include in the POST request body.
+
+        Returns:
+            requests.Response: The response from the POST request.
         """
         response = None
         try:
