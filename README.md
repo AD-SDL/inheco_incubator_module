@@ -48,7 +48,8 @@ Test the interface connection with the command below:
 
     python your\\path\\to\\inheco_incubator_interface.py --device <(optional) COM port of incubator device> --dll_path <(optional) path to incubator control DLL (ComLib.dll)>
 
---device will default to "COM5" and -dll_path will default to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll".
+* --device: defaults to "COM5"
+* -dll_path: defaults to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll".
 
 Example usage with no optional arguments:
 
@@ -76,7 +77,10 @@ Start the FastAPI Server with the command below:
     python your\\path\\to\\inheco_interface_FastAPI_wrapper.py --host <(optional) host computer IP for the interface API> --device <(optional) COM Port for the incubator device(s)> --port <(optional) Port to run FastAPI on> --dll_path <(optional) path to incubator control dll (ComLib.dll)>.
 
 
---host will default to "0.0.0.0", --device will default to "COM5", --port will default to 7000, and dll_path will default to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll".
+* --host: defaults to "0.0.0.0"
+*  --device: defaults to "COM5"
+* --port: defaults to 7000
+* --dll_path will default to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
 
 Example usage with no optional arguments:
 
@@ -94,24 +98,15 @@ If you would like to run these devices through MADSci, you will need to start on
 
 Each MADSci REST node can be started with a command in the format below. Make sure to adjust the stack floor and node_url arguments for each device.
 
-    device_id: int = 2
-    """Device ID of the Inheco Incubator device."""
-    stack_floor: int = 0
-    """Stack floor of the Inheco Incubator device."""
-    interface_host: str = "127.0.0.1"
-    """Inheco Interface FastAPI server host."""
-    interface_port: int = 7000
-    """Inheco Interface FastAPI server port."""
-
     python your\\path\\to\\inheco_incubator_module.py
     --node_url <(str, optional) address for your LiCONiC MADSci REST Node> --node_definition <(str, optional) path to MADSci node definition file for this incubator device --device_id <(int, optional) device ID of the Inheco Incubator device> --stack_floor <(int,optional) stack floor of the Inheco Incubator device> --interface_host <(str, optional) running Inheco incubator FastAPI server host> --interface_port <(int, optional) running Inheco incubator FastAPI server port>
 
-* --node_url: defaults to "http://127.0.0.1:2000". \
-* --node_definition: a new node definition file will be created if no existing file path is provided. \
-* --device_id: defaults to 2 (the vendor provided default device ID)\
-* --stack_floor: defaults to 0 (the bottom device in a stack) \
-* --interface_host: defaults to "127.0.0.1" \
-* --interface_port: defaults to 7000 \
+* --node_url: defaults to "http://127.0.0.1:2000"
+* --node_definition: a new node definition file will be created if no existing file path is provided
+* --device_id: defaults to 2 (the vendor provided default device ID)
+* --stack_floor: defaults to 0 (the bottom device in a stack)
+* --interface_host: defaults to "127.0.0.1"
+* --interface_port: defaults to 7000
 
 Example usage with no optional arguments (assumes no changes needed to defaults):
 
