@@ -19,23 +19,22 @@ Before using Inheco incubator(s), you will need to clone the module GitHub repo 
 
 General install instructions:
 
-1. Clone the repository
+1. Clone the repository:
     ```sh
     git clone https://github.com/AD-SDL/inheco_incubator_module.git
     cd inheco_incubator_module
     ```
 
-2. Create and activate a Python virtual environment
+2. Create and activate a Python virtual environment:
     ```sh
     python -m venv .venv
     .venv\Scripts\activate
     ```
 
-3. Install the dependencies using [PDM](https://pdm-project.org/en/latest/) or pip.
+3. Install the dependencies using [PDM](https://pdm-project.org/en/latest/) or pip:
     ```sh
     pip install -e .
     ```
-    OR
     ```sh
     pdm install
     ```
@@ -44,12 +43,12 @@ General install instructions:
 
 The Inheco incubator interface connects to the entire stack (one or multiple devices) over the COM port of the master device and can be used to send commands to any device in the stack.
 
-Test the interface connection with the command below:
+Test the interface connection with the command below.
 
     python your\\path\\to\\inheco_incubator_interface.py --device <(optional) COM port of incubator device> --dll_path <(optional) path to incubator control DLL (ComLib.dll)>
 
 * --device: defaults to "COM5"
-* -dll_path: defaults to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll".
+* -dll_path: defaults to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
 
 Example usage with no optional arguments:
 
@@ -72,7 +71,7 @@ The FastAPI wrapper instantiates a singleton instance of the Inheco incubator in
 
 If you plan to run each device through a MADSci REST module, you will need to start the FastAPI server before starting one MADSci node for each device.
 
-Start the FastAPI Server with the command below:
+Start the FastAPI Server with the command below.
 
     python your\\path\\to\\inheco_interface_FastAPI_wrapper.py --host <(optional) host computer IP for the interface API> --device <(optional) COM Port for the incubator device(s)> --port <(optional) Port to run FastAPI on> --dll_path <(optional) path to incubator control dll (ComLib.dll)>.
 
