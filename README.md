@@ -1,6 +1,6 @@
 # Inheco Single Plate Incubator Shaker Module
 
-A MADSci-powered module for controlling Inheco Single Plate Incubator Shakers. This module supports both the microplate and deep well versions of the incubator shakers.
+A MADSci-powered module for controlling [Inheco Single Plate Incubator Shakers](https://www.inheco.com/incubator-shaker.html). This module supports both the microplate and deep well versions of the incubator shakers.
 
 Contains an Inheco incubator interface (inheco_incubator_interface.py), a FastAPI wrapper for the interface functions (inheco_interface_FastAPI_wrapper.py), and an Inheco incubator REST node (inheco_incubator_rest_node.py).
 
@@ -63,7 +63,7 @@ This will print "Inheco incubator device connected" along with the specified COM
 
 You can also use this Python interface in other programs. The link below shows an example Python program which uses the Inheco interface to demonstrate all functions available in the interface.
 
-[Example interface usage](https://github.com/AD-SDL/inheco_incubator_module/blob/main/examples/interface_usage_example.py)
+[Example interface usage](examples/example_interface_usage.py)
 
 
 ### Running the FastAPI Interface Wrapper
@@ -125,4 +125,4 @@ Imagine there were two incubators in one stack. The command above would start th
 
 The link below shows an example of a YAML MADSci Workflow file that could interact with the Inheco Single Plate Incubator Shaker module.
 
-[Example MADSci usage](https://github.com/AD-SDL/inheco_incubator_module/blob/main/examples/example_madsci_workflow.yaml)
+[Example MADSci usage](examples/example_madsci_workflow.yaml)
