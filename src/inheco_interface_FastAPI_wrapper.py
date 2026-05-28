@@ -4,7 +4,8 @@ FastAPI wrapper for the Inheco incubator Python interface.
 
 import argparse
 import threading
-from typing import Any, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Optional
 
 import uvicorn
 from fastapi import FastAPI, Query, Request
@@ -18,11 +19,22 @@ from pydantic_models import (
 )
 
 device = None  # singleton interface instance
-app = FastAPI()
 config = {}
 cached_states = {}
 device_lock = threading.Lock()
 logger = EventClient()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Open the Inheco COM connection at startup."""
+    global device  # noqa PLW0603
+    with device_lock:
+        device = Interface(port=config["device"], dll_path=config["dll_path"])
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # GENERAL ACTIONS
@@ -60,19 +72,6 @@ def read_root() -> dict[str, str]:
     Displays a message on root endpoint.
     """
     return {"message": f"Running with device(s) on COM port {config['device']}."}
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    """
-    Called on start up of the FastAPI. Initializes the device interface.
-    """
-    global device  # noqa PLW0603
-    with device_lock:
-        try:
-            device = Interface(port=config["device"], dll_path=config["dll_path"])
-        except Exception as e:
-            raise (e)
 
 
 @app.get(

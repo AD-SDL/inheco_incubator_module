@@ -100,7 +100,7 @@ class InhecoNode(RestNode):
 
         self.plate_carrier = self.resource_client.create_resource_from_template(
             template_name="inheco.nest",
-            resource_name=f"{self.node_definition.node_name}.nest",
+            resource_name=f"{self.node_info.node_name}.nest",
         )
 
     # CUSTOM STATE HANDLER

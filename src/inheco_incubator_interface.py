@@ -63,10 +63,13 @@ class Interface:
                 self.logger.log_info("COM connection opened successfully")
                 print("COM connection opened successfully")  # noqa T201
             else:
-                self.logger.log_error(
-                    "Failed to open the Inheco incubator COM connection."
+                msg = (
+                    f"Failed to open the Inheco incubator COM connection "
+                    f"on port {self.port!r} (ComLib response code: {response!r}; "
+                    f"77=success, 170=fail per docs)."
                 )
-                raise Exception("Failed to open the Inheco incubator COM connection.")
+                self.logger.log_error(msg)
+                raise Exception(msg)
             return response
 
     def close_connection(self) -> None:
