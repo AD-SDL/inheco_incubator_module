@@ -4,8 +4,9 @@ FastAPI wrapper for the Inheco incubator Python interface.
 
 import argparse
 import threading
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Optional
+from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI, Query, Request

@@ -5,12 +5,16 @@ MADSci-compatible REST node to controlling an Inheco Single Plate Incubators.
 import time
 import traceback
 from threading import Thread
-from typing import Annotated, Optional
+from typing import Annotated, ClassVar, Optional
 
 import requests
 from madsci.common.types.action_types import ActionCancelled, ActionFailed
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.node_types import (
+    NodeIntrinsicLocationDefinition,
+    NodeRepresentationTemplateDefinition,
+    RestNodeConfig,
+)
 from madsci.common.types.resource_types import (
     Slot,
 )
@@ -47,6 +51,41 @@ class InhecoNode(RestNode):
     config_model = InhecoNodeConfig
     config: InhecoNodeConfig = InhecoNodeConfig()
     module_version = "1.1.0"
+
+    # Location representation templates — registered automatically by template_handler()
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="inheco_carriage_repr",
+            default_values={"carriage_type": "standard", "capacity": 1},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "capacity": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Number of plates the carriage can hold",
+                    },
+                },
+            },
+            required_overrides=[],
+            tags=["incubator", "carriage"],
+            version="1.0.0",
+            description="Incubator carriage representation with capacity",
+        ),
+    ]
+
+    # Intrinsic locations — auto-created on startup with '{node_name}.' prefix
+    intrinsic_locations: ClassVar[list[NodeIntrinsicLocationDefinition]] = [
+        NodeIntrinsicLocationDefinition(
+            location_name="inheco_carriage",
+            description="Inheco carriage where plates are placed for incubation.",
+            representation_template_name="inheco_carriage_repr",
+            resource_template_name="inheco.nest",
+            allow_transfers=True,
+        ),
+    ]
 
     # LIFECYCLE AND RESOURCE FUNCTIONS
     def startup_handler(self) -> None:
