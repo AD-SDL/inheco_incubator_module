@@ -1,0 +1,7 @@
+node_name: inheco_irene_2.0
+node_id: 01KAC253V8RC0AJM2CR2WARCVX
+node_description: null
+node_type: device
+module_name: inheco_node
+module_version: 0.0.1
+capabilities: null

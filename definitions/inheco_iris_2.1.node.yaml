@@ -1,0 +1,7 @@
+node_name: inheco_iris_2.1
+node_id: 01KAC265EERD7NHPWJR8B1HRF2
+node_description: null
+node_type: device
+module_name: inheco_node
+module_version: 0.0.1
+capabilities: null
