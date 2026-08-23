@@ -47,7 +47,7 @@ Test the interface connection with the command below.
 
     python your\\path\\to\\inheco_incubator_interface.py --device <(optional) COM port of incubator device> --dll_path <(optional) path to incubator control DLL (ComLib.dll)>
 
-* --device: defaults to "COM5"
+* --device: defaults to "COM6"
 * -dll_path: defaults to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
 
 Example usage with no optional arguments:
@@ -56,7 +56,7 @@ Example usage with no optional arguments:
 
 Example usage with optional device argument:
 
-    python inheco_incubator_interface.py --device "COM5" --dll_path "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
+    python inheco_incubator_interface.py --device "COM6" --dll_path "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
 
 This will print "Inheco incubator device connected" along with the specified COM port if the interface is able to connect correctly to the device.
 
@@ -77,7 +77,7 @@ Start the FastAPI Server with the command below.
 
 
 * --host: defaults to "0.0.0.0"
-*  --device: defaults to "COM5"
+*  --device: defaults to "COM6"
 * --port: defaults to 7000
 * --dll_path will default to "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
 
@@ -87,7 +87,7 @@ Example usage with no optional arguments:
 
 Example usage with all optional arguments:
 
-    python inheco_interface_FastAPI_wrapper.py --host "0.0.0.0" --device "COM5" --port 7000 --dll_path "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
+    python inheco_interface_FastAPI_wrapper.py --host "0.0.0.0" --device "COM6" --port 7000 --dll_path "C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
 
 Once the FastAPI Wrapper is running, you can go to the docs of your server to test out commands. For example, if all defaults were unchanged, you could go to http://localhost:7000/docs to see a list of all commands and example usage.
 

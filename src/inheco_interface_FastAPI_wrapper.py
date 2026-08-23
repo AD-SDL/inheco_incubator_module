@@ -170,6 +170,7 @@ def open_door(
     """
     Opens the door.
     """
+    # Open door at desired stack floor.
     device.open_door(stack_floor=stack_floor)
     logger.log_info(f"Door opened at stack floor {stack_floor}.")
 
