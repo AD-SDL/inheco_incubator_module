@@ -275,27 +275,28 @@ class InhecoNode(RestNode):
         """
         Opens the Inheco incubator tray.
         """
-        self.logger.log_info("Open called.")
-
-        # Stop the shaker if running.
-        response = self.send_get_request(action_string="stop_shaker")
-        self.logger.log_debug("Stopping shaker.")
-        self.logger.log_debug(response)
-
-        # Open the door.
-        response = self.send_get_request(action_string="open_door")
-        self.logger.log_debug(response)
-        self.logger.log_info("Open complete.")
+        try:
+            # Open the door.
+            response = self.send_get_request(action_string="open_door")
+            self.logger.log_debug(response)
+            self.logger.log_info("Open complete.")
+        except Exception as e:
+            self.logger.log_error(f"Error opening door: {e}")
+            return ActionFailed(errors=[f"Error opening door: {e}"])
 
     @action(name="close")
     def close(self) -> None:
         """
         Closes the Inheco incubator tray.
         """
-        self.logger.log_info("Close called.")
-        response = self.send_get_request(action_string="close_door")
-        self.logger.log_debug(response)
-        self.logger.log_info("Close complete.")
+        try:
+            self.logger.log_info("Close called.")
+            response = self.send_get_request(action_string="close_door")
+            self.logger.log_debug(response)
+            self.logger.log_info("Close complete.")
+        except Exception as e:
+            self.logger.log_error(f"Error closing door: {e}")
+            return ActionFailed(errors=[f"Error closing door: {e}"])
 
     @action(name="set_temperature")
     def set_temperature(
@@ -371,7 +372,6 @@ class InhecoNode(RestNode):
             wait_for_incubation_time (bool, optional): Whether to block until incubation time is complete. Defaults to False.
             incubation_time (int, optional): Time to incubate in seconds. Required if wait_for_incubation_time is True.
         """
-
         self.logger.log_info("Incubate called.")
         self.cancelled = False
 

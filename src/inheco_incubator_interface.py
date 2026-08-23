@@ -41,6 +41,8 @@ class Interface:
         self.port = port  # COM port of the device(s)
         self.logger = logger or EventClient()
 
+        self.initialized_stack_floors = []
+
         self.lock = threading.Lock()
         clr.AddReference(dll_path)
         from IncubatorCom import Com
@@ -88,6 +90,7 @@ class Interface:
             stack_floor (int): Stack floor of the Inheco incubator device.
         """
         self.send_message("AID", stack_floor=stack_floor, read_delay=3)
+        self.initialized_stack_floors.append(stack_floor)
         self.logger.log_info(
             f"Inheco incubator initialized at stack floor {stack_floor}."
         )
@@ -228,16 +231,53 @@ class Interface:
     # DOOR CONTROL METHODS
     def open_door(self, stack_floor: int) -> None:
         """
-        Opens the door.
+        Opens the door in a safe way!
+        Stops all shaking devices, opens door, then restarts other stopped shakers.
 
         Args:
             stack_floor (int): Stack floor of the Inheco incubator device.
+
         """
+        # Stop all shaking devices in the stack
+        stopped_shakers = []
+        for initialized_stack_floor in self.initialized_stack_floors:
+            is_shaking = self.is_shaker_active(stack_floor=initialized_stack_floor)
+            if is_shaking:
+                self.stop_shaker(stack_floor=initialized_stack_floor)
+                stopped_shakers.append(initialized_stack_floor)
+                self.logger.log_debug(
+                    f"Stopping shaker at stack floor {initialized_stack_floor}"
+                )
+                time.sleep(3)
+
+        # Open door at the specified stack floor.
         self.send_message(
             "AOD",
             stack_floor=stack_floor,
             read_delay=6,
         )  # wait 6 seconds before reading COM response
+
+        time.sleep(3)  # wait for door to open
+
+        # Restart the stopped shakers (excluding the device with open door).
+        for stopped_shaker in stopped_shakers:
+            if stopped_shaker != stack_floor:
+                self.start_shaker(stack_floor=stopped_shaker)
+                self.logger.log_debug(
+                    f"Restarted shaker at stack floor {stopped_shaker}"
+                )
+                time.sleep(3)
+
+        # Check that door is open.
+        door_status = self.report_door_status(stack_floor=stack_floor)
+        if door_status != "1":
+            self.logger.log_error(
+                f"Failed to open door at stack floor {stack_floor}. Door status= {door_status}."
+            )
+            raise ValueError(
+                f"Failed to open door at stack floor {stack_floor}. Door status= {door_status}."
+            )
+
         self.logger.log_info("Opened door.")
 
     def close_door(self, stack_floor: int) -> None:
@@ -247,11 +287,20 @@ class Interface:
         Args:
             stack_floor (int): Stack floor of the Inheco incubator device.
         """
+        # Close the door.
         self.send_message(
             "ACD",
             stack_floor=stack_floor,
             read_delay=7,
         )
+        time.sleep(2)  # wait for door to close
+
+        # Check that door is closed.
+        door_status = self.report_door_status(stack_floor=stack_floor)
+        if door_status != "0":
+            self.logger.log_error("Failed to close door.")
+            raise ValueError("Failed to close door.")
+
         self.logger.log_info("Closed door.")
 
     def report_door_status(self, stack_floor: int) -> str:
@@ -418,7 +467,6 @@ class Interface:
         Returns:
             formatted_response (str): Response from the COM port without extra characters.
         """
-
         with self.lock:
             # Convert message length, device ID, and stack floor to bytes.
             bytes_message_length = len(message_string) & 0xFF
@@ -496,7 +544,7 @@ if __name__ == "__main__":
         "--device",
         type=str,
         help="Serial port for communicating with the device",
-        default="COM5",
+        default="COM6",
     )
     argparser.add_argument(
         "--dll_path",
