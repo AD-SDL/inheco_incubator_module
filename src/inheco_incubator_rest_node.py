@@ -4,7 +4,6 @@ MADSci-compatible REST node to controlling an Inheco Single Plate Incubators.
 
 import time
 import traceback
-from threading import Thread
 from typing import Annotated, ClassVar, Optional
 
 import requests
@@ -21,10 +20,12 @@ from madsci.common.types.resource_types import (
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
+from lab_mail import send_email  # TEMP HELPER FUNCTION FOR SENDING EMAILS
 from pydantic_models import (
     SetShakerParametersRequest,
     StartShakerRequest,
     TemperatureRequest,
+    # IncubationParametersRequest,
 )
 
 
@@ -41,6 +42,8 @@ class InhecoNodeConfig(RestNodeConfig):
     """Inheco Interface FastAPI server port."""
     state_update_interval: Optional[float] = 5.0
     """Interval for updating module state in seconds."""
+    rate_limit_requests: int = 500
+    """Rate limit for requests to the Inheco incubator nodes."""
 
 
 class InhecoNode(RestNode):
@@ -170,9 +173,10 @@ class InhecoNode(RestNode):
                 }
 
         except Exception as e:
-            self.logger.log_error(
+            self.logger.log_warning(
                 f"Error collecting state information in state handler: {e}."
             )
+            # TESTING: Don't send email on log_error for Error in collecting state information.
 
     def shutdown_handler(self) -> None:
         """
@@ -282,6 +286,7 @@ class InhecoNode(RestNode):
             self.logger.log_info("Open complete.")
         except Exception as e:
             self.logger.log_error(f"Error opening door: {e}")
+            send_email(f"OPEN INHECO ACTION FAILED: {e}")  # SEND EMAIL
             return ActionFailed(errors=[f"Error opening door: {e}"])
 
     @action(name="close")
@@ -296,6 +301,7 @@ class InhecoNode(RestNode):
             self.logger.log_info("Close complete.")
         except Exception as e:
             self.logger.log_error(f"Error closing door: {e}")
+            send_email(f"CLOSE INHECO ACTION FAILED: {e}")  # SEND EMAIL
             return ActionFailed(errors=[f"Error closing door: {e}"])
 
     @action(name="set_temperature")
@@ -398,12 +404,16 @@ class InhecoNode(RestNode):
         # Handle shaking.
         try:
             # Don't start the shaker if user sets shaker frequency to 0.
+            self.logger.log_info(f"INCUBATE SHAKER FREQUENCY = {shaker_frequency}")
             if shaker_frequency != 0:
                 # Set the shaker parameters.
-                payload = SetShakerParametersRequest(
+                shaker_parameters_payload = SetShakerParametersRequest(
                     stack_floor=self.config.stack_floor, frequency=shaker_frequency
                 )
-                payload_dict = payload.model_dump()
+                payload_dict = shaker_parameters_payload.model_dump()
+                self.logger.log_info(
+                    f"SET SHAKER PARAMETERS PAYLOAD DICT: {payload_dict}"
+                )  # TESTING
                 self.send_post_request(
                     action_string="set_shaker_parameters",
                     arguments_dict=payload_dict,
@@ -415,10 +425,48 @@ class InhecoNode(RestNode):
                 )
                 payload_dict = payload.model_dump()
                 self.send_post_request(
-                    action_string="start_shaker",
+                    action_string="smart_start_shaker",
                     arguments_dict=payload_dict,
                 )
                 self.logger.log_info("Shaker set and started.")
+
+                # shaker_started = False
+                # for i in range(3):
+                #     try:
+                #         self.logger.log_info(f"ATTEMPTING TO START SHAKER AFTER INCUBATE!, attempt = {i+1}/3")
+
+                #         # Start shaker (status = "ND" means shake without checking for labware).
+                #         shaker_request_payload = StartShakerRequest(
+                #             stack_floor=self.config.stack_floor, status="ND"
+                #         )
+                #         payload_dict = shaker_request_payload.model_dump()
+                #         self.logger.log_info(f"START SHAKER PAYLOAD DICT: {payload_dict}")  # TESTING
+                #         self.send_post_request(
+                #             action_string="start_shaker",
+                #             arguments_dict=payload_dict,
+                #         )
+                #         #self.logger.log_info("Shaker set and started.")
+
+                #         time.sleep(10)  # wait for shaker to start
+
+                #         # Check that the shaker was started!
+                #         shaker_status = self.send_get_request(action_string="is_shaker_active").json()
+                #         self.logger.log_info(f"INCUBATE SHAKER STATUS: {shaker_status}")
+                #         if shaker_status:
+                #             self.logger.log_info(f"SHAKER STATUS IS TRUE.")
+                #             shaker_started = True
+                #             break
+
+                #     except Exception as e:
+                #         self.logger.log_warning(f"FAILED TO START THE SHAKER ON ATTEMPT {i+1}/3")
+
+                # if not shaker_started:
+                #     send_email(f"Failed to start shaker in incubate action on stack floor {self.config.stack_floor}")
+                #     return ActionFailed(errors=[f"Failed to start shaker in incubate action on stack floor {self.config.stack_floor}"])
+
+            else:
+                # Stop the shaker if it is shaking
+                self.send_get_request(action_string="stop_shaker")
 
         except Exception as e:
             self.logger.log_error(f"Error starting shaker in incubate action: {e}.")
@@ -440,22 +488,22 @@ class InhecoNode(RestNode):
                 return ActionFailed(
                     errors="You must specify incubation_time if wait_for_incubation is True."
                 )
-            if incubation_time:
-                # Call countdown incubation time in DIFFERENT process.
-                self.incubate_thread = Thread(
-                    target=self.count_down_incubation,
-                    args=[incubation_time],
-                    daemon=True,
-                )
-                self.incubate_thread.start()
+            # if incubation_time:
+            #     # Call countdown incubation time in DIFFERENT process.
+            #     self.incubate_thread = Thread(
+            #         target=self.count_down_incubation,
+            #         args=[incubation_time],
+            #         daemon=True,
+            #     )
+            #     self.incubate_thread.start()
 
-            else:
-                # Return success immediately, user can heat and shake indefinitely.
-                pass
+            # else:
+            #     # Return success immediately, user can heat and shake indefinitely.
+            #     pass
 
         except Exception as e:
             self.logger.log_error("Error starting incubation.")
-            self.logger.log_debug(traceback.format_exc())
+            self.logger.log_error(traceback.format_exc())
             return ActionFailed(errors=[f"Error starting incubation: {e}."])
 
     # ADMIN ACTIONS
