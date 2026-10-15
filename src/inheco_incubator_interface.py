@@ -44,6 +44,8 @@ class Interface:
         self.initialized_stack_floors = []
 
         self.lock = threading.Lock()
+
+        # Connect to the Inheco ComLib.dll and open the COM port.
         clr.AddReference(dll_path)
         from IncubatorCom import Com
 
@@ -70,7 +72,7 @@ class Interface:
                     f"on port {self.port!r} (ComLib response code: {response!r}; "
                     f"77=success, 170=fail per docs)."
                 )
-                self.logger.log_error(msg)
+                self.logger.log_warning(msg)
                 raise Exception(msg)
             return response
 
@@ -177,7 +179,7 @@ class Interface:
             message = "STT" + str(int(temperature * 10))
             return self.send_message(message, stack_floor=stack_floor)
 
-        self.logger.log_error(
+        self.logger.log_warning(
             "Error: Temperature input invalid in set_target_temperature method."
         )
         return None
@@ -223,7 +225,7 @@ class Interface:
                 return True
             raise Exception("Unexpected integer response from is_heater_active query.")
         except Exception as e:
-            self.logger.log_error(
+            self.logger.log_warning(
                 f"Unable to parse is_heater_active response: {response}. {traceback.format_exc()}"
             )
             raise (e)
@@ -231,54 +233,46 @@ class Interface:
     # DOOR CONTROL METHODS
     def open_door(self, stack_floor: int) -> None:
         """
-        Opens the door in a safe way!
-        Stops all shaking devices, opens door, then restarts other stopped shakers.
+        Opens the door in a safe way.
+
+        1. Collect the state of every shaker, retrying failed state
+        collections up to 3 times.
+        2. Stop all shakers that were active.
+        3. Attempt to open the door up to 3 times.
+        4. Always restart any shakers that were stopped by this operation.
 
         Args:
             stack_floor (int): Stack floor of the Inheco incubator device.
-
         """
-        # Stop all shaking devices in the stack
-        stopped_shakers = []
-        for initialized_stack_floor in self.initialized_stack_floors:
-            is_shaking = self.is_shaker_active(stack_floor=initialized_stack_floor)
-            if is_shaking:
-                self.stop_shaker(stack_floor=initialized_stack_floor)
-                stopped_shakers.append(initialized_stack_floor)
-                self.logger.log_debug(
-                    f"Stopping shaker at stack floor {initialized_stack_floor}"
-                )
-                time.sleep(3)
 
-        # Open door at the specified stack floor.
-        self.send_message(
-            "AOD",
-            stack_floor=stack_floor,
-            read_delay=6,
-        )  # wait 6 seconds before reading COM response
+        retry_count = 3
 
-        time.sleep(3)  # wait for door to open
+        shaker_states = self._collect_shaker_states(retry_count)
+        stopped_shakers = self._stop_active_shakers(shaker_states)
 
-        # Restart the stopped shakers (excluding the device with open door).
-        for stopped_shaker in stopped_shakers:
-            if stopped_shaker != stack_floor:
-                self.start_shaker(stack_floor=stopped_shaker)
-                self.logger.log_debug(
-                    f"Restarted shaker at stack floor {stopped_shaker}"
-                )
-                time.sleep(3)
+        door_error = None
 
-        # Check that door is open.
-        door_status = self.report_door_status(stack_floor=stack_floor)
-        if door_status != "1":
-            self.logger.log_error(
-                f"Failed to open door at stack floor {stack_floor}. Door status= {door_status}."
+        try:
+            self._open_door_with_retries(stack_floor, retry_count)
+        except Exception as e:
+            door_error = e
+
+        try:
+            self._restart_stopped_shakers(
+                stopped_shakers,
+                target_stack_floor=stack_floor,
+                retry_count=retry_count,
             )
-            raise ValueError(
-                f"Failed to open door at stack floor {stack_floor}. Door status= {door_status}."
-            )
+        except Exception as restart_error:
+            if door_error:
+                raise RuntimeError(
+                    f"Failed to open door at floor {stack_floor}: {door_error}. "
+                    f"Shaker restoration also failed: {restart_error}"
+                ) from door_error
+            raise
 
-        self.logger.log_info("Opened door.")
+        if door_error:
+            raise door_error
 
     def close_door(self, stack_floor: int) -> None:
         """
@@ -287,20 +281,11 @@ class Interface:
         Args:
             stack_floor (int): Stack floor of the Inheco incubator device.
         """
-        # Close the door.
         self.send_message(
             "ACD",
             stack_floor=stack_floor,
             read_delay=7,
         )
-        time.sleep(2)  # wait for door to close
-
-        # Check that door is closed.
-        door_status = self.report_door_status(stack_floor=stack_floor)
-        if door_status != "0":
-            self.logger.log_error("Failed to close door.")
-            raise ValueError("Failed to close door.")
-
         self.logger.log_info("Closed door.")
 
     def report_door_status(self, stack_floor: int) -> str:
@@ -348,12 +333,55 @@ class Interface:
         """
         if status in [1, "1", "ND"]:
             self.send_message(
-                "ASE" + str(status), stack_floor=stack_floor, read_delay=3
+                "ASE" + str(status), stack_floor=stack_floor, read_delay=8
             )
-            self.logger.log_info("Started shaker.")
+            self.logger.log_info(f"Started shaker at stack floor {stack_floor}.")
         else:
-            self.logger.log_error("Value Error: Invalid status in start_shaker method.")
-            raise ValueError("Invalid status in start_shaker method.")
+            self.logger.log_warning(
+                f"Value Error: Invalid status in start_shaker method, stack floor {stack_floor}."
+            )
+            raise ValueError(
+                f"Invalid status in start_shaker method, stack floor {stack_floor}."
+            )
+
+    def smart_start_shaker(
+        self, stack_floor: int, status: Optional[str] = "ND"
+    ) -> None:
+        """
+        Starts the shaker on the specified stack floor with the given status.
+
+        First collects the state of all shakers, stops any that are active,
+        and then starts the shaker at the specified stack floor. After starting the shaker,
+        it attempts to restart any shakers that were stopped.
+
+        Args:
+            stack_floor (int): Stack floor of the Inheco incubator device.
+            status (str, optional): "1" = on, "ND" = on without labware detection.
+        """
+        retry_count = 3
+
+        shaker_states = self._collect_shaker_states(retry_count)
+        stopped_shakers = self._stop_active_shakers(shaker_states)
+
+        start_error = None
+
+        try:
+            self._start_shaker_with_retries(stack_floor, status, retry_count)
+        except Exception as e:
+            start_error = e
+
+        try:
+            self._restart_stopped_shakers(stopped_shakers, stack_floor, retry_count)
+        except Exception as restart_error:
+            if start_error:
+                raise RuntimeError(
+                    f"Failed to start shaker at {stack_floor}: {start_error}. "
+                    f"Shaker restoration also failed: {restart_error}"
+                ) from start_error
+            raise
+
+        if start_error:
+            raise start_error
 
     def stop_shaker(self, stack_floor: int) -> None:
         """
@@ -380,17 +408,18 @@ class Interface:
         try:
             response = int(response)
             if response in [0, 2]:
+                # response 2 means shaker is switched off but still moving
                 self.logger.log_info("Shaker is inactive.")
                 return False
             if response == 1:
                 self.logger.log_info("Shaker is active.")
                 return True
-            self.logger.log_error(
+            self.logger.log_warning(
                 f"Unable to read shaker state: response = {response}."
             )
             raise Exception("Unable to read shaker state.")
         except Exception as e:
-            self.logger.log_error(
+            self.logger.log_warning(
                 f"Unable to parse is_shaker_active response: {response}."
             )
             raise (e)
@@ -438,13 +467,13 @@ class Interface:
                 )
                 self.logger.log_info("Shaker parameters set.")
             else:
-                self.logger.log_error(
+                self.logger.log_warning(
                     "Error: Invalid amplitude or frequency input values in set_shaker_parameters method."
                 )
 
         except Exception as e:
-            self.logger.log_error(f"Error: Unable to set shaker parameters. {e}")
-            self.logger.log_error(traceback.format_exc())
+            self.logger.log_warning(f"Error: Unable to set shaker parameters. {e}")
+            self.logger.log_warning(traceback.format_exc())
             raise e
 
     # HELPER METHODS
@@ -515,16 +544,211 @@ class Interface:
             formatted_response = formatted_response[:-4]
 
         except Exception as e:
-            self.logger.log_debug(
+            self.logger.log_info(
                 f"Device response ({response} could not be formatted. {e}"
             )
 
         # Check for '#' response, meaning invalid command was sent.
         if formatted_response == "#":
-            self.logger.log_debug("Error: invalid command sent, '#' response received.")
+            self.logger.log_info("Error: invalid command sent, '#' response received.")
             raise Exception("Invalid command sent, '#' response received.")
 
         return formatted_response
+
+    # INTERNAL HELPER METHODS
+    def _collect_shaker_states(self, retry_count: int) -> dict[int, bool]:
+        """Collect all shaker states, retrying failed queries."""
+        shaker_states = {}
+
+        for attempt in range(1, retry_count + 1):
+            for floor in self.initialized_stack_floors:
+                if floor in shaker_states:
+                    continue
+
+                try:
+                    shaker_states[floor] = self.is_shaker_active(stack_floor=floor)
+                except Exception as e:
+                    self.logger.log_warning(
+                        f"Failed to collect shaker state for floor {floor}, "
+                        f"attempt {attempt}/{retry_count}: {e}"
+                    )
+
+            if len(shaker_states) == len(self.initialized_stack_floors):
+                break
+
+            if attempt < retry_count:
+                time.sleep(2)
+
+        missing = [
+            floor
+            for floor in self.initialized_stack_floors
+            if floor not in shaker_states
+        ]
+
+        if missing:
+            raise RuntimeError(
+                f"Failed to collect shaker states after {retry_count} attempts. "
+                f"Missing floors: {missing}"
+            )
+
+        self.logger.log_info(f"Final shaker states: {shaker_states}")
+        return shaker_states
+
+    def _stop_active_shakers(self, shaker_states: dict[int, bool]) -> list[int]:
+        """Stop all currently active shakers and return successfully stopped floors."""
+        stopped_shakers = []
+
+        for floor, is_shaking in shaker_states.items():
+            if not is_shaking:
+                continue
+
+            self.stop_shaker(stack_floor=floor)
+            stopped_shakers.append(floor)
+
+            self.logger.log_info(f"Stopped shaker at stack floor {floor}")
+            time.sleep(5)
+
+        return stopped_shakers
+
+    def _start_shaker_with_retries(
+        self,
+        stack_floor: int,
+        status: Optional[str],
+        retry_count: int,
+    ) -> None:
+        """Start the requested shaker and verify that it is active."""
+        for attempt in range(1, retry_count + 1):
+            try:
+                self.logger.log_info(
+                    f"Starting shaker at floor {stack_floor}, "
+                    f"attempt {attempt}/{retry_count}"
+                )
+
+                self.start_shaker(stack_floor=stack_floor, status=status)
+                time.sleep(5)
+
+                if self.is_shaker_active(stack_floor=stack_floor):
+                    self.logger.log_info(
+                        f"Confirmed shaker started at floor {stack_floor}"
+                    )
+                    return
+
+                self.logger.log_warning(
+                    f"Shaker at floor {stack_floor} is not active "
+                    f"after attempt {attempt}"
+                )
+
+            except Exception as e:
+                self.logger.log_warning(
+                    f"Failed to start shaker at floor {stack_floor}, "
+                    f"attempt {attempt}/{retry_count}: {e}"
+                )
+
+            if attempt < retry_count:
+                time.sleep(2)
+
+        raise RuntimeError(
+            f"Failed to start shaker at floor {stack_floor} "
+            f"after {retry_count} attempts"
+        )
+
+    def _restart_stopped_shakers(
+        self,
+        stopped_shakers: list[int],
+        target_stack_floor: int,
+        retry_count: int,
+    ) -> None:
+        """Restart previously active shakers, excluding the target floor."""
+        failed_restarts = []
+
+        for floor in stopped_shakers:
+            if floor == target_stack_floor:
+                continue
+
+            if not self._restart_single_shaker(floor, retry_count):
+                failed_restarts.append(floor)
+
+        if failed_restarts:
+            raise RuntimeError(
+                f"Failed to restart shakers at floors: {failed_restarts}"
+            )
+
+    def _restart_single_shaker(self, stack_floor: int, retry_count: int) -> bool:
+        """Retry restarting one shaker and verify its state."""
+        for attempt in range(1, retry_count + 1):
+            try:
+                self.logger.log_info(
+                    f"Restarting shaker at floor {stack_floor}, "
+                    f"attempt {attempt}/{retry_count}"
+                )
+
+                self.start_shaker(stack_floor=stack_floor)
+                time.sleep(5)
+
+                if self.is_shaker_active(stack_floor=stack_floor):
+                    self.logger.log_info(
+                        f"Confirmed shaker restarted at floor {stack_floor}"
+                    )
+                    return True
+
+                self.logger.log_warning(
+                    f"Shaker at floor {stack_floor} did not restart "
+                    f"on attempt {attempt}"
+                )
+
+            except Exception as e:
+                self.logger.log_warning(
+                    f"Failed to restart shaker at floor {stack_floor}, "
+                    f"attempt {attempt}/{retry_count}: {e}"
+                )
+
+            if attempt < retry_count:
+                time.sleep(2)
+
+        self.logger.log_warning(
+            f"Shaker at floor {stack_floor} failed to restart "
+            f"after {retry_count} attempts"
+        )
+        return False
+
+    def _open_door_with_retries(self, stack_floor: int, retry_count: int) -> None:
+        """Open the door and verify its status, retrying on failure."""
+        for attempt in range(1, retry_count + 1):
+            try:
+                self.logger.log_info(f"Open door attempt #{attempt}/{retry_count}")
+
+                self.send_message(
+                    message_string="AOD",
+                    stack_floor=stack_floor,
+                    read_delay=6,
+                )
+                time.sleep(5)
+
+                door_status = self.report_door_status(stack_floor=stack_floor)
+
+                if door_status == "1":
+                    self.logger.log_info(
+                        f"Door opened successfully at stack floor {stack_floor}"
+                    )
+                    return
+
+                self.logger.log_warning(
+                    f"Door failed to open at stack floor {stack_floor}. "
+                    f"Door status={door_status}"
+                )
+
+            except Exception as e:
+                self.logger.log_warning(
+                    f"Open door attempt #{attempt}/{retry_count} failed: {e}"
+                )
+
+            if attempt < retry_count:
+                time.sleep(2)
+
+        raise RuntimeError(
+            f"Failed to open door at stack floor {stack_floor} "
+            f"after {retry_count} attempts"
+        )
 
     @property
     def is_busy(self) -> bool:

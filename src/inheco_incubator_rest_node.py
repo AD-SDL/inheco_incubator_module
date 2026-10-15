@@ -21,6 +21,9 @@ from madsci.common.types.resource_types import (
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
+# Temporary helper function for sending emails on failure.
+# This bug is fixed in MADSci 0.8.1 and this import will be removed when RAPID-446 is updated to use MADSci 0.8.1 or later.
+from lab_mail import send_email
 from pydantic_models import (
     SetShakerParametersRequest,
     StartShakerRequest,
@@ -41,6 +44,12 @@ class InhecoNodeConfig(RestNodeConfig):
     """Inheco Interface FastAPI server port."""
     state_update_interval: Optional[float] = 5.0
     """Interval for updating module state in seconds."""
+    rate_limit_requests: int = 500
+    """Rate limit for requests to the Inheco incubator nodes."""
+
+    # Temporary option to send emails
+    send_email_on_failure: bool = False
+    """Whether to send emails on action failures. This will be removed in future versions of MADSci 0.8.1 or later."""
 
 
 class InhecoNode(RestNode):
@@ -170,7 +179,7 @@ class InhecoNode(RestNode):
                 }
 
         except Exception as e:
-            self.logger.log_error(
+            self.logger.log_warning(
                 f"Error collecting state information in state handler: {e}."
             )
 
@@ -282,6 +291,8 @@ class InhecoNode(RestNode):
             self.logger.log_info("Open complete.")
         except Exception as e:
             self.logger.log_error(f"Error opening door: {e}")
+            if self.config.send_email_on_failure:
+                send_email(f"Open Inheco action failed: {e}")  # Send email on failure
             return ActionFailed(errors=[f"Error opening door: {e}"])
 
     @action(name="close")
@@ -296,6 +307,8 @@ class InhecoNode(RestNode):
             self.logger.log_info("Close complete.")
         except Exception as e:
             self.logger.log_error(f"Error closing door: {e}")
+            if self.config.send_email_on_failure:
+                send_email(f"Close Inheco action failed: {e}")  # Send email on failure
             return ActionFailed(errors=[f"Error closing door: {e}"])
 
     @action(name="set_temperature")
@@ -332,6 +345,10 @@ class InhecoNode(RestNode):
             )
             self.logger.log_debug(response)
         except Exception as e:
+            if self.config.send_email_on_failure:
+                send_email(
+                    f"Set temperature Inheco action failed: {e}"
+                )  # Send email on failure
             return ActionFailed(errors=[f"Error setting target temperature: {e}."])
 
         # Turn on/off the heater.
@@ -341,6 +358,10 @@ class InhecoNode(RestNode):
             else:
                 response = self.send_get_request(action_string="stop_heater")
         except Exception as e:
+            if self.config.send_email_on_failure:
+                send_email(
+                    f"Set heater Inheco action failed: {e}"
+                )  # Send email on failure
             return ActionFailed(errors=[f"Error setting heater: {e}."])
 
     # Incubate
@@ -393,6 +414,8 @@ class InhecoNode(RestNode):
         except Exception as e:
             self.logger.log_error(f"Error starting heater in incubate action: {e}.")
             self.logger.log_error(traceback.format_exc())
+            if self.config.send_email_on_failure:
+                send_email(f"Incubate action failed: {e}")
             return ActionFailed(errors=[f"Failed to set temperature action: {e}."])
 
         # Handle shaking.
@@ -400,10 +423,10 @@ class InhecoNode(RestNode):
             # Don't start the shaker if user sets shaker frequency to 0.
             if shaker_frequency != 0:
                 # Set the shaker parameters.
-                payload = SetShakerParametersRequest(
+                shaker_parameters_payload = SetShakerParametersRequest(
                     stack_floor=self.config.stack_floor, frequency=shaker_frequency
                 )
-                payload_dict = payload.model_dump()
+                payload_dict = shaker_parameters_payload.model_dump()
                 self.send_post_request(
                     action_string="set_shaker_parameters",
                     arguments_dict=payload_dict,
@@ -415,14 +438,20 @@ class InhecoNode(RestNode):
                 )
                 payload_dict = payload.model_dump()
                 self.send_post_request(
-                    action_string="start_shaker",
+                    action_string="smart_start_shaker",
                     arguments_dict=payload_dict,
                 )
                 self.logger.log_info("Shaker set and started.")
 
+            else:
+                # Stop the shaker if it is shaking.
+                self.send_get_request(action_string="stop_shaker")
+
         except Exception as e:
             self.logger.log_error(f"Error starting shaker in incubate action: {e}.")
             self.logger.log_error(traceback.format_exc())
+            if self.config.send_email_on_failure:
+                send_email(f"Incubate action failed: {e}")
             return ActionFailed(
                 errors=[
                     f"Failed to set shaker parameters or start shaking in incubate action: {traceback.format_exc()}"
@@ -455,7 +484,7 @@ class InhecoNode(RestNode):
 
         except Exception as e:
             self.logger.log_error("Error starting incubation.")
-            self.logger.log_debug(traceback.format_exc())
+            self.logger.log_error(traceback.format_exc())
             return ActionFailed(errors=[f"Error starting incubation: {e}."])
 
     # ADMIN ACTIONS

@@ -322,15 +322,15 @@ def is_heater_active(
 
 
 # SHAKER COMMANDS
-@app.post("/start_shaker", summary="Starts shaker at the specified stack floor.")
-def start_shaker(
+@app.post("/smart_start_shaker", summary="Starts shaker at the specified stack floor.")
+def smart_start_shaker(
     request: StartShakerRequest,
 ) -> None:
     """
-    Starts the shaker.
+    Starts the shaker in an elaborate smart way.
     """
-    device.start_shaker(stack_floor=request.stack_floor, status=request.status)
-    logger.log_info(f"Shaker started at stack floor {request.stack_floor}.")
+    device.smart_start_shaker(stack_floor=request.stack_floor, status=request.status)
+    logger.log_info(f"Smart shaker started at stack floor {request.stack_floor}.")
 
 
 @app.get("/stop_shaker", summary="Stops shaker at the specified stack floor.")
